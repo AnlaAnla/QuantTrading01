@@ -1,15 +1,17 @@
 # BinanceMomentumLab
 
 Binance USDⓈ-M USDT 永续合约异常动量监控实验室。当前提供公开 REST 扫描、分路由
-WebSocket 实时行情、本地订单簿、原始 Parquet 事件、特征与策略状态机，以及完全本地的
-PaperBroker、风险管理和浏览器监控面板；不包含任何真实或 Demo 下单实现。
+WebSocket 实时行情、本地订单簿、原始 Parquet 事件、特征与策略状态机、完全本地的
+PaperBroker、风险管理和浏览器监控面板，以及默认关闭的 Binance Futures Demo Trading
+适配器；不包含任何真实主网下单实现。
 
 ## 安全边界
 
-- `MONITOR` 与 `PAPER` 是第一阶段仅有的可启动模式。
-- `DEMO` 仅保留配置，启动会明确失败。
+- `MONITOR` 与 `PAPER` 默认可启动；`DEMO` 必须显式设置 `DEMO_TRADING_ENABLED=true`。
+- `DEMO` 交易只允许 `https://demo-fapi.binance.com` 和
+  `wss://fstream.binancefuture.com`，配置为其他地址会在启动前失败。
 - `LIVE` 永久硬禁用，即使 `LIVE_TRADING_ENABLED=true` 也会明确失败。
-- 当前代码不包含下单、提现、划转或签名交易请求。
+- 当前代码不包含任何主网交易、提现或划转路径。
 - API Secret 不进入日志、API 响应或数据库。
 
 ## 快速开始
@@ -109,6 +111,25 @@ K 线最高价/最低价推定成交。成交价先按可见档位计算 VWAP，
 离线测试包含三套固定行情：点火—回调—继续上涨、点火后立即失败、高位派发—跌破
 VWAP—反抽失败。每套都验证状态、订单、成交和净盈亏。
 
+## Binance Futures Demo Trading
+
+DEMO 适配器与 PaperBroker 分离，API Key 和 Secret 只从环境配置读取。它实现服务端时间
+同步、HMAC SHA-256、`recvWindow`、exchangeInfo 的 `tickSize`/`stepSize`/`minQty`/
+`minNotional` 规则、下单、查询、撤单、余额、仓位和 `/private/ws/<listenKey>` 用户数据流。
+平仓意图会强制生成 `reduceOnly=true`，客户端订单 ID 由幂等键稳定生成。
+
+订单提交若收到执行状态未知的 HTTP 503，会先按客户端订单 ID 查询；在状态仍未知时停止，
+绝不直接重复下单。启动时远端仓位必须与独立的本地 `demo_positions` 快照一致，否则系统
+保持运行但禁止开仓，只允许 reduce-only 平仓。DEMO 账户必须使用单向持仓模式。
+
+离线 mock 测试始终运行。真实 Demo 集成测试默认跳过，只有同时配置 Demo 凭据并显式设置
+以下开关才会连接指定的 Demo 端点：
+
+```powershell
+$env:RUN_BINANCE_DEMO_TESTS = "true"
+uv run pytest -q tests/test_demo_integration.py
+```
+
 ## 浏览器监控面板
 
 FastAPI 首页使用原生 HTML、CSS 和 JavaScript，不需要 React 或 Node 构建链。页面通过
@@ -127,6 +148,10 @@ Profit Factor、手续费和错误日志。
 - [24hr Ticker Price Change Statistics](https://developers.binance.com/docs/derivatives/usds-margined-futures/market-data/rest-api/24hr-Ticker-Price-Change-Statistics)
 - [Kline/Candlestick Data](https://developers.binance.com/docs/derivatives/usds-margined-futures/market-data/rest-api/Kline-Candlestick-Data)
 - [Open Interest](https://developers.binance.com/docs/derivatives/usds-margined-futures/market-data/rest-api/Open-Interest)
+- [New Order](https://developers.binance.com/docs/derivatives/usds-margined-futures/trade/rest-api/New-Order)
+- [Query Order](https://developers.binance.com/docs/derivatives/usds-margined-futures/trade/rest-api/Query-Order)
+- [Position Information V3](https://developers.binance.com/docs/derivatives/usds-margined-futures/trade/rest-api/Position-Information-V3)
+- [User Data Streams](https://developers.binance.com/docs/derivatives/usds-margined-futures/user-data-streams/Connect)
 - [WebSocket Market Streams](https://developers.binance.com/docs/derivatives/usds-margined-futures/websocket-market-streams)
 - [Aggregate Trade Streams](https://developers.binance.com/docs/derivatives/usds-margined-futures/websocket-market-streams/Aggregate-Trade-Streams)
 - [Liquidation Order Streams](https://developers.binance.com/docs/derivatives/usds-margined-futures/websocket-market-streams/Liquidation-Order-Streams)
@@ -134,5 +159,5 @@ Profit Factor、手续费和错误日志。
 
 ## 第一阶段以外
 
-真实交易和 DEMO 下单适配均未实现。PaperBroker 只存在于本地进程与 DuckDB 中，不得
-被改造成真实订单适配器。
+真实主网交易仍未实现且硬禁用。PaperBroker 只存在于本地进程与 DuckDB 中，不得被改造
+成真实订单适配器；Demo 认证客户端不得接受主网地址。

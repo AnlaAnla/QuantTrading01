@@ -7,6 +7,9 @@ layers contain no execution path. Never add real-money order placement, withdraw
 behavior without a separately approved phase and explicit safety review. LIVE mode must remain
 hard-disabled.
 
+The separately approved DEMO adapter may only use `https://demo-fapi.binance.com` and
+`wss://fstream.binancefuture.com`. It must never accept or derive a production trading endpoint.
+
 ## Engineering rules
 
 - Target Python 3.12 and keep strict type checking green.

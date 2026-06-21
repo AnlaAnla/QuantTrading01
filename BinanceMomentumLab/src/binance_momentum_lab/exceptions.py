@@ -17,12 +17,32 @@ class DemoTradingUnavailableError(UnsafeConfigurationError):
     """Raised when DEMO mode is requested before its execution adapter exists."""
 
 
+class DemoEndpointViolationError(UnsafeConfigurationError):
+    """Raised when a demo adapter is pointed at a non-demo Binance endpoint."""
+
+
+class DemoCredentialsMissingError(UnsafeConfigurationError):
+    """Raised when explicitly enabled demo trading lacks environment credentials."""
+
+
 class BinanceAPIError(MomentumLabError):
     """Raised for a non-success Binance API response."""
 
 
 class BinanceRateLimitError(BinanceAPIError):
     """Raised after Binance returns HTTP 429 or 418."""
+
+
+class DemoOrderValidationError(BinanceAPIError):
+    """Raised before sending a demo order that violates exchange filters."""
+
+
+class DemoExecutionStatusUnknownError(BinanceAPIError):
+    """Raised when a 503 leaves demo order execution unresolved after querying it."""
+
+
+class DemoStateMismatchError(BinanceAPIError):
+    """Raised when local and remote demo positions differ and opening is blocked."""
 
 
 class WebSocketProtocolError(MomentumLabError):

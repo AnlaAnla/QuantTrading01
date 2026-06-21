@@ -7,7 +7,7 @@ import logging
 from collections.abc import Awaitable, Callable
 
 from ..binance.client import PublicMarketDataClient
-from ..config import Settings
+from ..config import AppMode, Settings
 from ..exceptions import WebSocketProtocolError
 from ..storage import DuckDBStore
 from .book_manager import LocalOrderBookManager
@@ -77,8 +77,13 @@ class RealtimeMarketDataService:
             if not symbols:
                 return
             partitioned = streams_for_symbols(set(symbols))
+            websocket_url = (
+                self._settings.binance_demo_ws_url
+                if self._settings.app_mode is AppMode.DEMO
+                else self._settings.binance_mainnet_ws_url
+            )
             for route, streams in partitioned.items():
-                url = combined_stream_url(self._settings.binance_mainnet_ws_url, route, streams)
+                url = combined_stream_url(websocket_url, route, streams)
                 session = RoutedWebSocketSession(
                     route,
                     url,

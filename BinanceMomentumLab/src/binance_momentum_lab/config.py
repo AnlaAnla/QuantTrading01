@@ -10,7 +10,15 @@ from pathlib import Path
 from pydantic import Field, HttpUrl, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from .exceptions import DemoTradingUnavailableError, LiveTradingDisabledError
+from .exceptions import (
+    DemoCredentialsMissingError,
+    DemoEndpointViolationError,
+    DemoTradingUnavailableError,
+    LiveTradingDisabledError,
+)
+
+DEMO_REST_URL = "https://demo-fapi.binance.com"
+DEMO_WS_URL = "wss://fstream.binancefuture.com"
 
 
 class AppMode(StrEnum):
@@ -42,6 +50,8 @@ class Settings(BaseSettings):
     paper_initial_balance: Decimal = Field(default=Decimal("10000"), gt=0)
     live_trading_enabled: bool = False
     demo_trading_enabled: bool = False
+    demo_recv_window_ms: int = Field(default=5000, ge=1, le=5000)
+    demo_user_stream_keepalive_seconds: int = Field(default=3000, ge=60, lt=3600)
 
     scan_interval_seconds: float = Field(default=10, gt=0)
     min_24h_quote_volume: Decimal = Field(default=Decimal("100000000"), ge=0)
@@ -117,21 +127,43 @@ class Settings(BaseSettings):
             raise ValueError("Binance WebSocket URLs must use wss://")
         return value.rstrip("/")
 
+    @field_validator("binance_demo_rest_url")
+    @classmethod
+    def validate_demo_rest_url(cls, value: HttpUrl) -> HttpUrl:
+        if str(value).rstrip("/") != DEMO_REST_URL:
+            raise ValueError(f"Demo REST endpoint must be {DEMO_REST_URL}")
+        return value
+
+    @field_validator("binance_demo_ws_url")
+    @classmethod
+    def validate_demo_websocket_url(cls, value: str) -> str:
+        normalized = value.rstrip("/")
+        if normalized != DEMO_WS_URL:
+            raise ValueError(f"Demo WebSocket endpoint must be {DEMO_WS_URL}")
+        return normalized
+
     @field_validator("feature_benchmark_symbol")
     @classmethod
     def normalize_benchmark_symbol(cls, value: str) -> str:
         return value.upper()
 
     def startup_safety_check(self) -> None:
-        """Fail closed for all execution modes unavailable in phase one."""
+        """Fail closed unless an execution mode satisfies its explicit safety gate."""
         if self.app_mode is AppMode.LIVE:
             raise LiveTradingDisabledError(
                 "LIVE mode is hard-disabled in this release, regardless of LIVE_TRADING_ENABLED"
             )
         if self.app_mode is AppMode.DEMO:
-            raise DemoTradingUnavailableError(
-                "DEMO mode is reserved but no order adapter is implemented in phase one"
-            )
+            if not self.demo_trading_enabled:
+                raise DemoTradingUnavailableError(
+                    "DEMO mode requires explicit DEMO_TRADING_ENABLED=true"
+                )
+            if not self.binance_api_key or not self.binance_api_secret:
+                raise DemoCredentialsMissingError(
+                    "DEMO mode requires BINANCE_API_KEY and BINANCE_API_SECRET"
+                )
+            if self.demo_data:
+                raise DemoEndpointViolationError("DEMO mode cannot run with local DEMO_DATA")
 
     @property
     def public_config(self) -> dict[str, object]:
@@ -143,6 +175,8 @@ class Settings(BaseSettings):
             "paper_initial_balance": str(self.paper_initial_balance),
             "live_trading_enabled": False,
             "demo_trading_enabled": self.demo_trading_enabled,
+            "demo_rest_url": str(self.binance_demo_rest_url),
+            "demo_ws_url": self.binance_demo_ws_url,
             "scan_interval_seconds": self.scan_interval_seconds,
             "max_candidates": self.max_candidates,
             "demo_data": self.demo_data,

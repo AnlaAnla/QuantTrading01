@@ -14,7 +14,10 @@ from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconn
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from ..config import Settings, get_settings
+from ..config import AppMode, Settings, get_settings
+from ..demo_trading.client import BinanceDemoTradingClient
+from ..demo_trading.service import DemoTradingAdapter
+from ..demo_trading.user_stream import DemoUserDataStream
 from ..logging_config import configure_logging
 from ..market_data.candidates import DynamicCandidateManager
 from ..market_data.service import RealtimeMarketDataService
@@ -87,7 +90,11 @@ def create_app(settings: Settings | None = None, *, start_scanner: bool = True) 
                 realtime.health,
                 realtime.books.books,
             )
-            if strategy is not None and realtime is not None
+            if (
+                configured.app_mode is AppMode.PAPER
+                and strategy is not None
+                and realtime is not None
+            )
             else None
         )
         if paper_execution is not None:
@@ -102,14 +109,24 @@ def create_app(settings: Settings | None = None, *, start_scanner: bool = True) 
         app.state.risk_manager = risk_manager
         app.state.paper_broker = paper_broker
         app.state.paper_execution = paper_execution
+        demo_adapter: DemoTradingAdapter | None = None
+        if configured.app_mode is AppMode.DEMO:
+            demo_client = BinanceDemoTradingClient(configured)
+            demo_adapter = DemoTradingAdapter(demo_client, store)
+            demo_adapter.user_stream = DemoUserDataStream(
+                configured, demo_client, demo_adapter.on_user_event
+            )
+        app.state.demo_adapter = demo_adapter
         app.state.emergency_stop = False
-        if runtime is not None:
-            if realtime is not None:
-                realtime.start()
-            if strategy is not None:
-                strategy.start()
-            runtime.start()
         try:
+            if demo_adapter is not None:
+                await demo_adapter.start()
+            if runtime is not None:
+                if realtime is not None:
+                    realtime.start()
+                if strategy is not None:
+                    strategy.start()
+                runtime.start()
             yield
         finally:
             if runtime is not None:
@@ -118,6 +135,8 @@ def create_app(settings: Settings | None = None, *, start_scanner: bool = True) 
                 await strategy.stop()
             if realtime is not None:
                 await realtime.stop()
+            if demo_adapter is not None:
+                await demo_adapter.stop()
             if runtime is not None:
                 await runtime.client.aclose()
             await asyncio.to_thread(store.close)
@@ -140,8 +159,21 @@ def create_app(settings: Settings | None = None, *, start_scanner: bool = True) 
             websocket_status = "disabled_demo_data"
         else:
             websocket_status = "disabled_for_test"
+        demo_adapter: DemoTradingAdapter | None = request.app.state.demo_adapter
+        demo_in_sync = demo_adapter.positions_in_sync if demo_adapter is not None else None
+        demo_stream_healthy = (
+            demo_adapter.user_stream.healthy
+            if demo_adapter is not None and demo_adapter.user_stream is not None
+            else None
+        )
         return {
-            "status": "ok" if rest_status != "degraded" else "degraded",
+            "status": (
+                "ok"
+                if rest_status != "degraded"
+                and demo_in_sync is not False
+                and demo_stream_healthy is not False
+                else "degraded"
+            ),
             "mode": configured.app_mode.value,
             "rest": rest_status,
             "websocket": websocket_status,
@@ -149,6 +181,15 @@ def create_app(settings: Settings | None = None, *, start_scanner: bool = True) 
             "entries_paused": bool(request.app.state.risk_manager.entries_paused),
             "emergency_stop": bool(request.app.state.risk_manager.emergency_stopped),
             "last_error": last_error,
+            "demo_positions_in_sync": demo_in_sync,
+            "demo_user_stream": (
+                {
+                    "healthy": demo_stream_healthy,
+                    "last_error": demo_adapter.user_stream.last_error,
+                }
+                if demo_adapter is not None and demo_adapter.user_stream is not None
+                else None
+            ),
             "checked_at_utc": datetime.now(UTC),
             "checked_at_asia_shanghai": datetime.now(UTC).astimezone(ZoneInfo("Asia/Shanghai")),
         }

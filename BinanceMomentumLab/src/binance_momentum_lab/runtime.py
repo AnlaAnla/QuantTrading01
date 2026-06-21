@@ -9,7 +9,7 @@ from contextlib import suppress
 from datetime import UTC, datetime
 
 from .binance.client import BinancePublicRESTClient
-from .config import Settings
+from .config import AppMode, Settings
 from .demo import DemoPublicMarketDataClient
 from .scanner import Candidate, MarketScanner
 from .storage import DuckDBStore
@@ -32,8 +32,13 @@ class ScannerRuntime:
         if settings.demo_data:
             self.client = DemoPublicMarketDataClient()
         else:
+            rest_url = (
+                settings.binance_demo_rest_url
+                if settings.app_mode is AppMode.DEMO
+                else settings.binance_mainnet_rest_url
+            )
             self.client = BinancePublicRESTClient(
-                str(settings.binance_mainnet_rest_url),
+                str(rest_url),
                 timeout_seconds=settings.http_timeout_seconds,
                 max_retries=settings.http_max_retries,
             )

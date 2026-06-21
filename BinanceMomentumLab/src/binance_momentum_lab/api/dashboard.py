@@ -53,11 +53,22 @@ async def dashboard_snapshot(app: FastAPI) -> dict[str, Any]:
     else:
         websocket_health = "disabled_for_test"
     now = datetime.now(UTC)
+    demo_adapter = getattr(app.state, "demo_adapter", None)
+    demo_in_sync = demo_adapter.positions_in_sync if demo_adapter is not None else None
+    demo_stream_healthy = (
+        demo_adapter.user_stream.healthy
+        if demo_adapter is not None and demo_adapter.user_stream is not None
+        else None
+    )
     payload = {
         "system": {
-            "status": "degraded"
-            if runtime is not None and runtime.rest_status == "degraded"
-            else "ok",
+            "status": (
+                "degraded"
+                if (runtime is not None and runtime.rest_status == "degraded")
+                or demo_in_sync is False
+                or demo_stream_healthy is False
+                else "ok"
+            ),
             "mode": settings.app_mode.value,
             "rest": runtime.rest_status if runtime is not None else "disabled_for_test",
             "websocket": websocket_health,
@@ -67,6 +78,18 @@ async def dashboard_snapshot(app: FastAPI) -> dict[str, Any]:
             "checked_at_utc": now,
             "checked_at_asia_shanghai": now.astimezone(ZoneInfo("Asia/Shanghai")),
             "health_components": persisted_health,
+            "demo_positions_in_sync": demo_in_sync,
+            "demo_mismatch_detail": (
+                demo_adapter.mismatch_detail if demo_adapter is not None else None
+            ),
+            "demo_user_stream": (
+                {
+                    "healthy": demo_stream_healthy,
+                    "last_error": demo_adapter.user_stream.last_error,
+                }
+                if demo_adapter is not None and demo_adapter.user_stream is not None
+                else None
+            ),
         },
         "candidates": candidates,
         "features": features,

@@ -27,6 +27,7 @@ def test_initializes_all_required_tables_and_replaces_candidates() -> None:
         "account_snapshots",
         "strategy_state",
         "system_health",
+        "demo_positions",
     }
     assert required <= store.table_names()
 

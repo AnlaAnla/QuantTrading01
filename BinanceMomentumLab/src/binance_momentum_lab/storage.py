@@ -12,6 +12,7 @@ from typing import Any
 
 import duckdb
 
+from .demo_trading.models import DemoPosition
 from .paper.models import AccountSnapshot, PaperFill, PaperOrder, PaperPosition
 from .scanner import Candidate
 from .strategy.models import FeatureSnapshot, StrategySignal, StrategyState
@@ -24,6 +25,15 @@ SCHEMA_STATEMENTS = (
         contract_type VARCHAR NOT NULL,
         quote_asset VARCHAR NOT NULL,
         updated_at TIMESTAMPTZ NOT NULL
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS demo_positions (
+        symbol VARCHAR NOT NULL,
+        position_side VARCHAR NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT current_timestamp,
+        payload_json JSON NOT NULL,
+        PRIMARY KEY (symbol, position_side)
     )
     """,
     """
@@ -344,6 +354,37 @@ class DuckDBStore:
                 """,
                 [snapshot.timestamp, snapshot.model_dump_json()],
             )
+
+    def save_demo_position(self, position: DemoPosition) -> None:
+        """Persist the latest user-stream position without mixing it with paper positions."""
+        with self._lock:
+            if position.quantity == 0:
+                self._connection.execute(
+                    "DELETE FROM demo_positions WHERE symbol = ? AND position_side = ?",
+                    [position.symbol, position.position_side.value],
+                )
+                return
+            self._connection.execute(
+                """
+                INSERT INTO demo_positions (symbol, position_side, payload_json)
+                VALUES (?, ?, ?)
+                ON CONFLICT (symbol, position_side) DO UPDATE SET
+                    updated_at = now(),
+                    payload_json = excluded.payload_json
+                """,
+                [
+                    position.symbol,
+                    position.position_side.value,
+                    position.model_dump_json(by_alias=True),
+                ],
+            )
+
+    def list_demo_positions(self) -> list[DemoPosition]:
+        with self._lock:
+            rows = self._connection.execute(
+                "SELECT payload_json FROM demo_positions ORDER BY symbol, position_side"
+            ).fetchall()
+        return [DemoPosition.model_validate_json(str(row[0])) for row in rows]
 
     def list_paper_orders(self, limit: int = 100) -> list[dict[str, Any]]:
         return self._list_json("paper_orders", "created_at", limit)

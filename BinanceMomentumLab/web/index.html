@@ -16,6 +16,8 @@
     body { margin: 0; background: radial-gradient(circle at 80% -10%, #163149 0, transparent 35%), var(--bg); color: var(--text); }
     button, input { font: inherit; }
     .shell { width: min(1540px, 96vw); margin: 0 auto; padding: 22px 0 48px; }
+    .demo-banner { display: none; margin-bottom: 14px; padding: 13px 16px; border: 2px solid #f2ba62; border-radius: 12px; background: #402b0f; color: #ffe2a6; text-align: center; font-weight: 900; letter-spacing: .12em; box-shadow: 0 0 28px #f2ba6230; }
+    .demo-banner.visible { display: block; }
     header { display: flex; align-items: center; justify-content: space-between; gap: 22px; margin-bottom: 20px; }
     .brand { display: flex; align-items: center; gap: 14px; }
     .mark { width: 42px; height: 42px; border-radius: 13px; display: grid; place-items: center; background: linear-gradient(145deg, #38d5a0, #4b83ff); color: #04110c; font-weight: 900; box-shadow: 0 8px 28px #36d39a44; }
@@ -77,8 +79,9 @@
 </head>
 <body>
   <main class="shell">
+    <div class="demo-banner" id="demo-banner" role="alert">BINANCE FUTURES DEMO TRADING · 非主网</div>
     <header>
-      <div class="brand"><div class="mark">M</div><div><div class="eyebrow">USDⓈ-M · Local paper research</div><h1>Binance Momentum Lab</h1></div></div>
+      <div class="brand"><div class="mark">M</div><div><div class="eyebrow" id="environment-label">USDⓈ-M · Local paper research</div><h1>Binance Momentum Lab</h1></div></div>
       <div class="header-right">
         <div class="live"><span class="dot" id="ws-dot"></span><span id="ws-label">连接中</span></div>
         <div class="controls">
@@ -146,6 +149,10 @@
     function render() {
       const system = dashboard.system || {};
       const performance = dashboard.performance || {};
+      const demoMode = system.mode === "DEMO";
+      byId("demo-banner").classList.toggle("visible", demoMode);
+      byId("environment-label").textContent = demoMode ? "USDⓈ-M · Binance Futures Demo" : "USDⓈ-M · Local paper research";
+      document.title = demoMode ? "DEMO · Binance Momentum Lab" : "Binance Momentum Lab · Paper Console";
       setText("system-status", String(system.status || "—").toUpperCase(), system.status === "ok" ? "positive" : "negative");
       byId("mode").textContent = `${system.mode || "—"} · ${system.entries_paused ? "已暂停" : "允许开仓"}`;
       setText("equity", `${num(performance.equity)} USDT`);
@@ -166,7 +173,12 @@
     function renderSystem(system) {
       const list = byId("system-list"); list.replaceChildren();
       const ws = typeof system.websocket === "object" ? Object.entries(system.websocket.routes || {}).map(([key, val]) => `${key}: ${val.status}`).join(" · ") : system.websocket;
-      [["运行模式", system.mode], ["REST", system.rest], ["WebSocket", ws], ["数据库", system.database], ["新开仓", system.entries_paused ? "PAUSED" : "ACTIVE"], ["紧急停止", system.emergency_stop ? "ACTIVE" : "OFF"]].forEach(([name, value]) => { const row = document.createElement("div"); row.className = "system-row"; row.append(label(name), label(value || "—", String(value).includes("degraded") || value === "ACTIVE" && name === "紧急停止" ? "negative" : "")); list.append(row); });
+      const rows = [["运行模式", system.mode], ["REST", system.rest], ["WebSocket", ws], ["数据库", system.database], ["新开仓", system.entries_paused ? "PAUSED" : "ACTIVE"], ["紧急停止", system.emergency_stop ? "ACTIVE" : "OFF"]];
+      if (system.mode === "DEMO") {
+        rows.push(["Demo 仓位对账", system.demo_positions_in_sync ? "SYNCED" : "MISMATCH"]);
+        rows.push(["Demo 用户流", system.demo_user_stream?.healthy ? "HEALTHY" : "DEGRADED"]);
+      }
+      rows.forEach(([name, value]) => { const row = document.createElement("div"); row.className = "system-row"; row.append(label(name), label(value || "—", String(value).toLowerCase().includes("degraded") || value === "MISMATCH" || value === "ACTIVE" && name === "紧急停止" ? "negative" : "")); list.append(row); });
     }
 
     function latestBySymbol(items) { const map = new Map(); items.forEach(item => { if (!map.has(item.symbol)) map.set(item.symbol, item); }); return map; }

@@ -17,6 +17,8 @@ def test_dashboard_is_native_and_contains_required_realtime_domains() -> None:
     assert 'id="orders-body"' in html
     assert 'id="positions-body"' in html
     assert 'id="error-list"' in html
+    assert 'id="demo-banner"' in html
+    assert "BINANCE FUTURES DEMO TRADING" in html
 
 
 def test_dangerous_actions_require_phrase_and_backend_confirmation() -> None:
