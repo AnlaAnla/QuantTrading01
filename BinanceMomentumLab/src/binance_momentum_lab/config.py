@@ -146,7 +146,6 @@ class Settings(BaseSettings):
             "scan_interval_seconds": self.scan_interval_seconds,
             "max_candidates": self.max_candidates,
             "demo_data": self.demo_data,
-            "api_key_masked": mask_api_key(self.binance_api_key),
             "strategy_thresholds": {
                 "watch_return_5m_percent": str(self.strategy_watch_return_5m_percent),
                 "watch_volume_zscore": str(self.strategy_watch_volume_zscore),

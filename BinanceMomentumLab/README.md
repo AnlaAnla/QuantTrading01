@@ -1,8 +1,8 @@
 # BinanceMomentumLab
 
 Binance USDⓈ-M USDT 永续合约异常动量监控实验室。当前提供公开 REST 扫描、分路由
-WebSocket 实时行情、本地订单簿、原始 Parquet 事件和健康检查；不包含任何真实或模拟
-下单实现。
+WebSocket 实时行情、本地订单簿、原始 Parquet 事件、特征与策略状态机，以及完全本地的
+PaperBroker、风险管理和浏览器监控面板；不包含任何真实或 Demo 下单实现。
 
 ## 安全边界
 
@@ -108,6 +108,17 @@ K 线最高价/最低价推定成交。成交价先按可见档位计算 VWAP，
 
 离线测试包含三套固定行情：点火—回调—继续上涨、点火后立即失败、高位派发—跌破
 VWAP—反抽失败。每套都验证状态、订单、成交和净盈亏。
+
+## 浏览器监控面板
+
+FastAPI 首页使用原生 HTML、CSS 和 JavaScript，不需要 React 或 Node 构建链。页面通过
+`/ws/dashboard` 接收初始快照和按顶层数据域拆分的增量更新，展示系统健康、候选币、
+特征、状态机、信号、模拟订单与成交、仓位、盈亏、权益曲线、最大回撤、胜率、
+Profit Factor、手续费和错误日志。
+
+`/api/paper/pause` 与 `/api/paper/resume` 控制是否允许新开仓。紧急停止和重置模拟账户
+需要在浏览器中输入“确认”，后端也会独立校验请求体中的 `confirm=true`。公共配置接口和
+面板数据均不返回 API Key 或 API Secret。
 
 ## 官方接口依据
 

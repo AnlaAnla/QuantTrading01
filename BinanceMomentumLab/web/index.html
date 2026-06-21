@@ -1,52 +1,201 @@
 <!doctype html>
 <html lang="zh-CN">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Binance Momentum Lab</title>
-    <style>
-      :root { color-scheme: dark; font-family: Inter, system-ui, sans-serif; }
-      body { margin: 0; background: #07111f; color: #dce7f5; }
-      main { width: min(1120px, 92vw); margin: 48px auto; }
-      header { display: flex; justify-content: space-between; align-items: end; gap: 24px; }
-      h1 { margin: 0; font-size: clamp(2rem, 5vw, 4rem); letter-spacing: -.05em; }
-      .muted { color: #8092a8; }
-      .badge { padding: 8px 12px; border: 1px solid #18c99866; border-radius: 999px; color: #51e2b8; }
-      .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin: 34px 0; }
-      .card { background: #0d1b2c; border: 1px solid #1b3048; border-radius: 14px; padding: 18px; }
-      .value { margin-top: 8px; font-size: 1.35rem; font-weight: 650; }
-      table { width: 100%; border-collapse: collapse; background: #0d1b2c; border-radius: 14px; overflow: hidden; }
-      th, td { text-align: right; padding: 14px; border-bottom: 1px solid #1b3048; }
-      th:first-child, td:first-child { text-align: left; }
-      th { color: #8092a8; font-size: .8rem; text-transform: uppercase; }
-      .empty { text-align: center !important; color: #8092a8; padding: 32px; }
-    </style>
-  </head>
-  <body>
-    <main>
-      <header><div><p class="muted">USDⓈ-M Futures · Research only</p><h1>Momentum Lab</h1></div><span class="badge" id="mode">加载中</span></header>
-      <section class="grid">
-        <div class="card"><span class="muted">REST</span><div class="value" id="rest">—</div></div>
-        <div class="card"><span class="muted">WebSocket</span><div class="value" id="ws">—</div></div>
-        <div class="card"><span class="muted">数据库</span><div class="value" id="db">—</div></div>
-        <div class="card"><span class="muted">上海时间</span><div class="value" id="time">—</div></div>
-      </section>
-      <h2>当前候选</h2>
-      <table><thead><tr><th>Symbol</th><th>24h 涨幅</th><th>5m 涨幅</th><th>24h 成交额</th><th>Volume Z</th></tr></thead><tbody id="rows"></tbody></table>
-    </main>
-    <script>
-      const fmt = (v, digits=2) => Number(v).toLocaleString('zh-CN', {maximumFractionDigits: digits});
-      async function refresh() {
-        const [health, candidates] = await Promise.all([fetch('/api/health').then(r => r.json()), fetch('/api/candidates').then(r => r.json())]);
-        mode.textContent = health.mode; rest.textContent = health.rest;
-        ws.textContent = typeof health.websocket === 'object'
-          ? Object.entries(health.websocket.routes).map(([name, value]) => `${name}: ${value.status}`).join(' · ')
-          : health.websocket;
-        db.textContent = health.database;
-        time.textContent = new Date(health.checked_at_utc).toLocaleTimeString('zh-CN', {timeZone:'Asia/Shanghai'});
-        rows.innerHTML = candidates.length ? candidates.map(c => `<tr><td>${c.symbol}</td><td>${fmt(c.price_change_24h_percent)}%</td><td>${fmt(c.price_change_5m_percent)}%</td><td>${fmt(c.quote_volume_24h, 0)}</td><td>${fmt(c.volume_zscore)}</td></tr>`).join('') : '<tr><td colspan="5" class="empty">等待首次扫描结果</td></tr>';
-      }
-      refresh(); setInterval(refresh, 5000);
-    </script>
-  </body>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Binance Momentum Lab · Paper Console</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #071018; --panel: #0d1923; --panel-2: #111f2b; --line: #203443;
+      --text: #e7f0f5; --muted: #8196a5; --green: #45d6a1; --red: #ff6f72;
+      --amber: #f2ba62; --blue: #65a9ff; --shadow: 0 18px 55px #0005;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: radial-gradient(circle at 80% -10%, #163149 0, transparent 35%), var(--bg); color: var(--text); }
+    button, input { font: inherit; }
+    .shell { width: min(1540px, 96vw); margin: 0 auto; padding: 22px 0 48px; }
+    header { display: flex; align-items: center; justify-content: space-between; gap: 22px; margin-bottom: 20px; }
+    .brand { display: flex; align-items: center; gap: 14px; }
+    .mark { width: 42px; height: 42px; border-radius: 13px; display: grid; place-items: center; background: linear-gradient(145deg, #38d5a0, #4b83ff); color: #04110c; font-weight: 900; box-shadow: 0 8px 28px #36d39a44; }
+    h1 { margin: 0; font-size: 1.15rem; letter-spacing: -.02em; }
+    .eyebrow { color: var(--muted); font-size: .73rem; text-transform: uppercase; letter-spacing: .12em; margin-bottom: 3px; }
+    .header-right, .controls { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+    .live { display: flex; align-items: center; gap: 7px; padding: 8px 11px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: .8rem; }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--amber); box-shadow: 0 0 12px currentColor; }
+    .dot.ok { background: var(--green); } .dot.bad { background: var(--red); }
+    button { border: 1px solid var(--line); background: #122330; color: var(--text); border-radius: 9px; padding: 8px 12px; cursor: pointer; transition: .18s ease; }
+    button:hover { border-color: #3d6077; transform: translateY(-1px); }
+    button.danger { color: #ffb3b5; border-color: #6b343a; background: #2a171c; }
+    button.warning { color: #ffd691; border-color: #654e2d; background: #292218; }
+    button.primary { color: #071510; border-color: var(--green); background: var(--green); font-weight: 700; }
+    .status-grid { display: grid; grid-template-columns: repeat(6, minmax(130px, 1fr)); gap: 10px; margin-bottom: 12px; }
+    .metric { background: linear-gradient(145deg, #101e29, #0b1720); border: 1px solid var(--line); border-radius: 13px; padding: 14px; min-height: 88px; }
+    .metric .label { color: var(--muted); font-size: .73rem; }
+    .metric .value { font-size: 1.28rem; font-weight: 720; margin-top: 9px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .metric .sub { color: var(--muted); font-size: .7rem; margin-top: 4px; }
+    .positive { color: var(--green) !important; } .negative { color: var(--red) !important; } .amber { color: var(--amber) !important; }
+    .layout { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(310px, .7fr); gap: 12px; }
+    .stack { display: grid; gap: 12px; align-content: start; }
+    .panel { background: color-mix(in srgb, var(--panel) 94%, transparent); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; box-shadow: var(--shadow); }
+    .panel-head { padding: 13px 15px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--line); }
+    .panel-head h2 { margin: 0; font-size: .85rem; letter-spacing: .02em; }
+    .count { color: var(--muted); font-size: .72rem; }
+    .table-wrap { overflow: auto; max-height: 300px; }
+    table { width: 100%; border-collapse: collapse; font-size: .76rem; }
+    th { position: sticky; top: 0; z-index: 1; background: #101e29; color: var(--muted); text-align: right; font-weight: 600; white-space: nowrap; }
+    th, td { padding: 10px 12px; border-bottom: 1px solid #192c39; text-align: right; white-space: nowrap; }
+    th:first-child, td:first-child { text-align: left; }
+    tbody tr:hover { background: #142633; }
+    .empty { text-align: center !important; color: var(--muted); padding: 25px !important; }
+    .state-pill, .side-pill { display: inline-flex; padding: 3px 7px; border-radius: 999px; border: 1px solid #345066; font-size: .65rem; letter-spacing: .04em; }
+    .side-pill.LONG { color: var(--green); border-color: #28765d; } .side-pill.SHORT { color: var(--red); border-color: #794047; }
+    .chart { height: 220px; padding: 10px 12px 2px; position: relative; }
+    .chart svg { width: 100%; height: 100%; overflow: visible; }
+    .chart-grid { stroke: #203443; stroke-width: 1; } .chart-line { fill: none; stroke: var(--green); stroke-width: 2; vector-effect: non-scaling-stroke; }
+    .chart-area { fill: url(#equityGradient); opacity: .35; }
+    .chart-empty { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font-size: .78rem; }
+    .system-list { padding: 6px 14px; }
+    .system-row { display: flex; justify-content: space-between; gap: 14px; padding: 9px 0; border-bottom: 1px solid #192c39; font-size: .75rem; }
+    .system-row:last-child { border: 0; } .system-row span:first-child { color: var(--muted); }
+    .log-list { max-height: 255px; overflow: auto; padding: 8px 13px; }
+    .log { padding: 9px 0; border-bottom: 1px solid #192c39; }
+    .log time { color: var(--muted); font-size: .66rem; } .log p { margin: 4px 0 0; color: #ffb1b3; font-size: .74rem; line-height: 1.4; word-break: break-word; }
+    dialog { width: min(430px, 92vw); border: 1px solid #6c3d42; border-radius: 16px; background: #111c25; color: var(--text); padding: 0; box-shadow: 0 30px 100px #000c; }
+    dialog::backdrop { background: #020609cc; backdrop-filter: blur(4px); }
+    .dialog-body { padding: 22px; } .dialog-body h3 { margin: 0 0 10px; }
+    .dialog-body p { color: var(--muted); font-size: .82rem; line-height: 1.55; }
+    .dialog-body input { width: 100%; background: #08131b; border: 1px solid var(--line); color: var(--text); border-radius: 9px; padding: 10px; margin: 7px 0 15px; }
+    .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
+    #toast { position: fixed; right: 22px; bottom: 22px; background: #172a37; border: 1px solid #365267; padding: 11px 15px; border-radius: 10px; box-shadow: var(--shadow); opacity: 0; transform: translateY(10px); pointer-events: none; transition: .2s; font-size: .78rem; }
+    #toast.show { opacity: 1; transform: translateY(0); }
+    footer { color: var(--muted); text-align: right; font-size: .68rem; padding-top: 12px; }
+    @media (max-width: 1100px) { .status-grid { grid-template-columns: repeat(3, 1fr); } .layout { grid-template-columns: 1fr; } }
+    @media (max-width: 680px) { .shell { width: 94vw; } header { align-items: flex-start; flex-direction: column; } .status-grid { grid-template-columns: repeat(2, 1fr); } .header-right { width: 100%; } .controls { width: 100%; } .controls button { flex: 1; } }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header>
+      <div class="brand"><div class="mark">M</div><div><div class="eyebrow">USDⓈ-M · Local paper research</div><h1>Binance Momentum Lab</h1></div></div>
+      <div class="header-right">
+        <div class="live"><span class="dot" id="ws-dot"></span><span id="ws-label">连接中</span></div>
+        <div class="controls">
+          <button class="warning" id="pause-btn">暂停新开仓</button>
+          <button id="resume-btn">恢复新开仓</button>
+          <button class="danger" data-danger="emergency">紧急停止</button>
+          <button class="danger" data-danger="reset">重置账户</button>
+        </div>
+      </div>
+    </header>
+
+    <section class="status-grid">
+      <article class="metric"><div class="label">系统状态</div><div class="value" id="system-status">—</div><div class="sub" id="mode">—</div></article>
+      <article class="metric"><div class="label">账户权益</div><div class="value" id="equity">—</div><div class="sub">USDT · Paper</div></article>
+      <article class="metric"><div class="label">已实现盈亏</div><div class="value" id="realized-pnl">—</div><div class="sub" id="funding">Funding —</div></article>
+      <article class="metric"><div class="label">最大回撤</div><div class="value" id="max-drawdown">—</div><div class="sub">权益曲线</div></article>
+      <article class="metric"><div class="label">胜率 / Profit Factor</div><div class="value" id="win-rate">—</div><div class="sub" id="profit-factor">PF —</div></article>
+      <article class="metric"><div class="label">累计手续费</div><div class="value" id="fees">—</div><div class="sub" id="clock">—</div></article>
+    </section>
+
+    <div class="layout">
+      <div class="stack">
+        <section class="panel"><div class="panel-head"><h2>权益曲线</h2><span class="count" id="equity-count">0 points</span></div><div class="chart"><svg viewBox="0 0 900 210" preserveAspectRatio="none" aria-label="账户权益曲线"><defs><linearGradient id="equityGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#45d6a1"/><stop offset="1" stop-color="#45d6a1" stop-opacity="0"/></linearGradient></defs><line class="chart-grid" x1="0" y1="52" x2="900" y2="52"/><line class="chart-grid" x1="0" y1="105" x2="900" y2="105"/><line class="chart-grid" x1="0" y1="158" x2="900" y2="158"/><path id="equity-area" class="chart-area"/><path id="equity-line" class="chart-line"/></svg><div class="chart-empty" id="chart-empty">等待账户快照</div></div></section>
+        <section class="panel"><div class="panel-head"><h2>候选币与实时特征</h2><span class="count" id="feature-count">0</span></div><div class="table-wrap"><table><thead><tr><th>Symbol</th><th>状态</th><th>1m</th><th>5m</th><th>15m</th><th>Vol Z</th><th>Taker Buy</th><th>OI 5m</th><th>Basis</th><th>Spread</th><th>BTC Residual</th></tr></thead><tbody id="features-body"></tbody></table></div></section>
+        <section class="panel"><div class="panel-head"><h2>策略信号</h2><span class="count" id="signal-count">0</span></div><div class="table-wrap"><table><thead><tr><th>时间</th><th>Symbol</th><th>方向</th><th>状态</th><th>参考入场</th><th>参考止损</th><th>置信度</th><th>Reason Codes</th></tr></thead><tbody id="signals-body"></tbody></table></div></section>
+        <section class="panel"><div class="panel-head"><h2>模拟订单与成交</h2><span class="count" id="order-count">0</span></div><div class="table-wrap"><table><thead><tr><th>时间</th><th>Symbol</th><th>类型</th><th>方向</th><th>数量</th><th>状态</th><th>Reduce-only</th><th>成交价 / 手续费</th></tr></thead><tbody id="orders-body"></tbody></table></div></section>
+      </div>
+
+      <aside class="stack">
+        <section class="panel"><div class="panel-head"><h2>系统状态</h2><span class="count" id="update-revision">rev —</span></div><div class="system-list" id="system-list"></div></section>
+        <section class="panel"><div class="panel-head"><h2>当前仓位</h2><span class="count" id="position-count">0</span></div><div class="table-wrap"><table><thead><tr><th>Symbol</th><th>方向</th><th>数量</th><th>入场</th><th>止损</th><th>止盈</th></tr></thead><tbody id="positions-body"></tbody></table></div></section>
+        <section class="panel"><div class="panel-head"><h2>状态机</h2><span class="count" id="state-count">0</span></div><div class="table-wrap"><table><thead><tr><th>Symbol</th><th>State</th><th>更新时间</th></tr></thead><tbody id="states-body"></tbody></table></div></section>
+        <section class="panel"><div class="panel-head"><h2>错误日志</h2><span class="count" id="error-count">0</span></div><div class="log-list" id="error-list"></div></section>
+      </aside>
+    </div>
+    <footer>数据经 <code>/ws/dashboard</code> 增量推送 · 页面不读取或展示任何 API 密钥</footer>
+  </main>
+
+  <dialog id="confirm-dialog">
+    <div class="dialog-body"><div class="eyebrow">危险操作 · 二次确认</div><h3 id="dialog-title">确认操作</h3><p id="dialog-copy"></p><label for="confirm-input">输入“确认”继续</label><input id="confirm-input" autocomplete="off" placeholder="确认"><div class="dialog-actions"><button id="dialog-cancel">取消</button><button class="danger" id="dialog-confirm" disabled>执行操作</button></div></div>
+  </dialog>
+  <div id="toast" role="status"></div>
+
+  <script>
+    "use strict";
+    let dashboard = {};
+    let revision = 0;
+    let reconnectDelay = 1000;
+    let pendingDanger = null;
+    const byId = id => document.getElementById(id);
+    const num = (value, digits = 2) => value == null ? "—" : Number(value).toLocaleString("zh-CN", { minimumFractionDigits: digits, maximumFractionDigits: digits });
+    const pct = (value, digits = 2) => value == null ? "—" : `${num(Number(value) * 100, digits)}%`;
+    const pp = value => value == null ? "—" : `${num(value)}%`;
+    const time = value => value ? new Date(value).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai", hour12: false }) : "—";
+    const valueClass = value => Number(value) > 0 ? "positive" : Number(value) < 0 ? "negative" : "";
+
+    function setText(id, value, className = "") { const node = byId(id); node.textContent = value; node.className = `value ${className}`.trim(); }
+    function emptyRow(columns, text = "暂无数据") { const tr = document.createElement("tr"); const td = document.createElement("td"); td.colSpan = columns; td.className = "empty"; td.textContent = text; tr.append(td); return tr; }
+    function renderRows(bodyId, rows, columns, renderer) { const body = byId(bodyId); body.replaceChildren(); if (!rows.length) { body.append(emptyRow(columns)); return; } rows.forEach(row => body.append(renderer(row))); }
+    function cell(value, className = "") { const td = document.createElement("td"); td.textContent = value; if (className) td.className = className; return td; }
+    function label(value, className = "") { const span = document.createElement("span"); span.textContent = value; if (className) span.className = className; return span; }
+    function rowOf(values) { const tr = document.createElement("tr"); values.forEach(value => tr.append(value instanceof Node ? value : cell(String(value)))); return tr; }
+    function pill(value, kind = "state-pill") { const span = document.createElement("span"); span.className = `${kind} ${value}`; span.textContent = value || "—"; const td = document.createElement("td"); td.append(span); return td; }
+
+    function render() {
+      const system = dashboard.system || {};
+      const performance = dashboard.performance || {};
+      setText("system-status", String(system.status || "—").toUpperCase(), system.status === "ok" ? "positive" : "negative");
+      byId("mode").textContent = `${system.mode || "—"} · ${system.entries_paused ? "已暂停" : "允许开仓"}`;
+      setText("equity", `${num(performance.equity)} USDT`);
+      setText("realized-pnl", num(performance.realized_pnl), valueClass(performance.realized_pnl));
+      byId("funding").textContent = `Funding ${num(performance.cumulative_funding, 4)}`;
+      setText("max-drawdown", pct(performance.max_drawdown_fraction));
+      setText("win-rate", pct(performance.win_rate));
+      byId("profit-factor").textContent = `PF ${performance.profit_factor == null ? "—" : num(performance.profit_factor)}`;
+      setText("fees", num(performance.cumulative_fees, 4));
+      byId("clock").textContent = time(system.checked_at_asia_shanghai);
+      renderSystem(system);
+      renderFeatures(); renderSignals(); renderOrders(); renderPositions(); renderStates(); renderErrors(); renderEquity();
+      byId("update-revision").textContent = `rev ${revision}`;
+      byId("pause-btn").disabled = Boolean(system.entries_paused);
+      byId("resume-btn").disabled = !system.entries_paused;
+    }
+
+    function renderSystem(system) {
+      const list = byId("system-list"); list.replaceChildren();
+      const ws = typeof system.websocket === "object" ? Object.entries(system.websocket.routes || {}).map(([key, val]) => `${key}: ${val.status}`).join(" · ") : system.websocket;
+      [["运行模式", system.mode], ["REST", system.rest], ["WebSocket", ws], ["数据库", system.database], ["新开仓", system.entries_paused ? "PAUSED" : "ACTIVE"], ["紧急停止", system.emergency_stop ? "ACTIVE" : "OFF"]].forEach(([name, value]) => { const row = document.createElement("div"); row.className = "system-row"; row.append(label(name), label(value || "—", String(value).includes("degraded") || value === "ACTIVE" && name === "紧急停止" ? "negative" : "")); list.append(row); });
+    }
+
+    function latestBySymbol(items) { const map = new Map(); items.forEach(item => { if (!map.has(item.symbol)) map.set(item.symbol, item); }); return map; }
+    function renderFeatures() {
+      const features = latestBySymbol(dashboard.features || []); const states = latestBySymbol(dashboard.strategy_states || []); const candidates = dashboard.candidates || [];
+      const symbols = [...new Set([...candidates.map(x => x.symbol), ...features.keys()])]; byId("feature-count").textContent = String(symbols.length);
+      renderRows("features-body", symbols, 11, symbol => { const f = features.get(symbol) || {}; const s = states.get(symbol) || {}; return rowOf([cell(symbol), pill(s.state || "NORMAL"), cell(pp(f.return_1m_percent), valueClass(f.return_1m_percent)), cell(pp(f.return_5m_percent), valueClass(f.return_5m_percent)), cell(pp(f.return_15m_percent), valueClass(f.return_15m_percent)), cell(num(f.volume_zscore)), cell(pct(f.taker_buy_ratio)), cell(pp(f.open_interest_change_5m_percent)), cell(pp(f.basis_percent)), cell(f.spread_bps == null ? "—" : `${num(f.spread_bps)} bps`), cell(pp(f.btc_residual_return_5m_percent), valueClass(f.btc_residual_return_5m_percent))]); });
+    }
+
+    function renderSignals() { const rows = dashboard.signals || []; byId("signal-count").textContent = String(rows.length); renderRows("signals-body", rows, 8, s => rowOf([cell(time(s.timestamp)), cell(s.symbol), pill(s.side, "side-pill"), pill(s.state), cell(num(s.entry_reference_price, 4)), cell(num(s.stop_reference_price, 4)), cell(pct(s.confidence_score)), cell((s.reason_codes || []).join(" · "))])); }
+    function renderOrders() { const orders = dashboard.orders || []; const fills = new Map((dashboard.fills || []).map(fill => [fill.order_id, fill])); byId("order-count").textContent = `${orders.length} / ${(dashboard.fills || []).length} fills`; renderRows("orders-body", orders, 8, o => { const f = fills.get(o.order_id); return rowOf([cell(time(o.created_at)), cell(o.symbol), cell(o.order_type), cell(o.side), cell(num(o.quantity, 4)), cell(o.status), cell(o.reduce_only ? "YES" : "NO"), cell(f ? `${num(f.price, 4)} / ${num(f.fee, 4)}` : "—")]); }); }
+    function renderPositions() { const rows = dashboard.positions || []; byId("position-count").textContent = String(rows.length); renderRows("positions-body", rows, 6, p => rowOf([cell(p.symbol), pill(p.side, "side-pill"), cell(num(p.quantity, 4)), cell(num(p.entry_price, 4)), cell(num(p.stop_price, 4)), cell(num(p.take_profit_price, 4))])); }
+    function renderStates() { const rows = dashboard.strategy_states || []; byId("state-count").textContent = String(rows.length); renderRows("states-body", rows, 3, s => rowOf([cell(s.symbol), pill(s.state), cell(time(s.updated_at))])); }
+    function renderErrors() { const rows = dashboard.errors || []; byId("error-count").textContent = String(rows.length); const list = byId("error-list"); list.replaceChildren(); if (!rows.length) { const p = document.createElement("p"); p.className = "empty"; p.textContent = "暂无错误"; list.append(p); return; } rows.forEach(item => { const node = document.createElement("div"); node.className = "log"; const stamp = document.createElement("time"); stamp.textContent = `${time(item.timestamp)} · ${item.logger}`; const message = document.createElement("p"); message.textContent = item.message; node.append(stamp, message); list.append(node); }); }
+
+    function renderEquity() { const rows = [...(dashboard.equity_curve || [])].reverse(); byId("equity-count").textContent = `${rows.length} points`; const line = byId("equity-line"); const area = byId("equity-area"); byId("chart-empty").style.display = rows.length ? "none" : "grid"; if (!rows.length) { line.setAttribute("d", ""); area.setAttribute("d", ""); return; } const values = rows.map(x => Number(x.equity)); const min = Math.min(...values), max = Math.max(...values), range = max - min || 1; const points = values.map((value, index) => [rows.length === 1 ? 450 : index / (rows.length - 1) * 900, 190 - (value - min) / range * 170]); const path = points.map((p, i) => `${i ? "L" : "M"}${p[0].toFixed(2)},${p[1].toFixed(2)}`).join(" "); line.setAttribute("d", path); area.setAttribute("d", `${path} L${points.at(-1)[0]},210 L${points[0][0]},210 Z`); }
+
+    async function post(url, body) { const response = await fetch(url, { method: "POST", headers: body ? { "Content-Type": "application/json" } : {}, body: body ? JSON.stringify(body) : null }); const data = await response.json(); if (!response.ok) throw new Error(data.detail || `HTTP ${response.status}`); return data; }
+    function toast(message) { const node = byId("toast"); node.textContent = message; node.classList.add("show"); setTimeout(() => node.classList.remove("show"), 2400); }
+    byId("pause-btn").addEventListener("click", async () => { try { await post("/api/paper/pause"); toast("已暂停新开仓"); } catch (error) { toast(error.message); } });
+    byId("resume-btn").addEventListener("click", async () => { try { await post("/api/paper/resume"); toast("已恢复新开仓"); } catch (error) { toast(error.message); } });
+    document.querySelectorAll("[data-danger]").forEach(button => button.addEventListener("click", () => { pendingDanger = button.dataset.danger; byId("dialog-title").textContent = pendingDanger === "reset" ? "重置模拟账户？" : "触发紧急停止？"; byId("dialog-copy").textContent = pendingDanger === "reset" ? "这会永久清除本地模拟订单、成交、持仓历史与权益曲线。" : "这会暂停所有新开仓，并为当前模拟仓位创建 reduce-only 紧急平仓单。"; byId("confirm-input").value = ""; byId("dialog-confirm").disabled = true; byId("confirm-dialog").showModal(); byId("confirm-input").focus(); }));
+    byId("confirm-input").addEventListener("input", event => { byId("dialog-confirm").disabled = event.target.value.trim() !== "确认"; });
+    byId("dialog-cancel").addEventListener("click", () => byId("confirm-dialog").close());
+    byId("dialog-confirm").addEventListener("click", async () => { const endpoint = pendingDanger === "reset" ? "/api/paper/reset" : "/api/emergency-stop"; try { await post(endpoint, { confirm: true }); byId("confirm-dialog").close(); toast(pendingDanger === "reset" ? "模拟账户已重置" : "紧急停止已触发"); } catch (error) { toast(error.message); } });
+
+    async function bootstrap() { try { dashboard = await fetch("/api/dashboard").then(response => response.json()); render(); } catch (error) { toast(`初始数据加载失败：${error.message}`); } connect(); }
+    function connect() { const scheme = location.protocol === "https:" ? "wss" : "ws"; const socket = new WebSocket(`${scheme}://${location.host}/ws/dashboard`); socket.addEventListener("open", () => { reconnectDelay = 1000; byId("ws-dot").className = "dot ok"; byId("ws-label").textContent = "实时推送"; }); socket.addEventListener("message", event => { const message = JSON.parse(event.data); revision = message.revision || revision; if (message.type === "snapshot") dashboard = message.data; if (message.type === "patch") Object.assign(dashboard, message.changes); render(); }); socket.addEventListener("close", () => { byId("ws-dot").className = "dot bad"; byId("ws-label").textContent = "正在重连"; setTimeout(connect, reconnectDelay); reconnectDelay = Math.min(reconnectDelay * 2, 15000); }); socket.addEventListener("error", () => socket.close()); }
+    bootstrap();
+  </script>
+</body>
 </html>

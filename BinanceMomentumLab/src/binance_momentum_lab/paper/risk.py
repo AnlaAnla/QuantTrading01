@@ -14,6 +14,7 @@ from ..strategy.models import SignalSide, StrategySignal
 class RiskRejectCode(StrEnum):
     MODE_NOT_PAPER = "MODE_NOT_PAPER"
     EMERGENCY_STOP = "EMERGENCY_STOP"
+    NEW_ENTRIES_PAUSED = "NEW_ENTRIES_PAUSED"
     DAILY_LOSS_LIMIT = "DAILY_LOSS_LIMIT"
     CONSECUTIVE_LOSS_COOLDOWN = "CONSECUTIVE_LOSS_COOLDOWN"
     STALE_MARKET_DATA = "STALE_MARKET_DATA"
@@ -48,6 +49,7 @@ class RiskManager:
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
         self.emergency_stopped = False
+        self.entries_paused = False
         self._daily_date: date | None = None
         self._daily_start_equity: Decimal | None = None
         self._daily_realized_pnl = Decimal(0)
@@ -68,6 +70,8 @@ class RiskManager:
             rejects.append(RiskRejectCode.MODE_NOT_PAPER)
         if self.emergency_stopped:
             rejects.append(RiskRejectCode.EMERGENCY_STOP)
+        if self.entries_paused:
+            rejects.append(RiskRejectCode.NEW_ENTRIES_PAUSED)
         if self._daily_loss_exceeded():
             rejects.append(RiskRejectCode.DAILY_LOSS_LIMIT)
         if self._cooldown_until is not None and environment.timestamp < self._cooldown_until:
@@ -130,8 +134,15 @@ class RiskManager:
     def clear_emergency_stop(self) -> None:
         self.emergency_stopped = False
 
+    def pause_entries(self) -> None:
+        self.entries_paused = True
+
+    def resume_entries(self) -> None:
+        self.entries_paused = False
+
     def reset(self) -> None:
         self.emergency_stopped = False
+        self.entries_paused = False
         self._daily_date = None
         self._daily_start_equity = None
         self._daily_realized_pnl = Decimal(0)

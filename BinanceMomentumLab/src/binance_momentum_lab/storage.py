@@ -246,6 +246,53 @@ class DuckDBStore:
             ).fetchall()
         return [json.loads(str(row[0])) for row in rows]
 
+    def list_feature_snapshots(self, limit: int = 100) -> list[dict[str, Any]]:
+        with self._lock:
+            rows = self._connection.execute(
+                """
+                SELECT features_json FROM feature_snapshots
+                ORDER BY observed_at DESC LIMIT ?
+                """,
+                [limit],
+            ).fetchall()
+        return [json.loads(str(row[0])) for row in rows]
+
+    def list_strategy_states(self) -> list[dict[str, Any]]:
+        with self._lock:
+            rows = self._connection.execute(
+                """
+                SELECT symbol, state, updated_at, payload_json
+                FROM strategy_state ORDER BY updated_at DESC
+                """
+            ).fetchall()
+        return [
+            {
+                "symbol": str(row[0]),
+                "state": str(row[1]),
+                "updated_at": row[2],
+                "detail": json.loads(str(row[3])),
+            }
+            for row in rows
+        ]
+
+    def list_system_health(self) -> list[dict[str, Any]]:
+        with self._lock:
+            rows = self._connection.execute(
+                """
+                SELECT component, status, checked_at, detail
+                FROM system_health ORDER BY component
+                """
+            ).fetchall()
+        return [
+            {
+                "component": str(row[0]),
+                "status": str(row[1]),
+                "checked_at": row[2],
+                "detail": row[3],
+            }
+            for row in rows
+        ]
+
     def save_paper_order(self, order: PaperOrder) -> None:
         with self._lock:
             self._connection.execute(

@@ -12,6 +12,7 @@ from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
+from pydantic import BaseModel
 
 from ..config import Settings, get_settings
 from ..logging_config import configure_logging
@@ -24,8 +25,13 @@ from ..runtime import ScannerRuntime
 from ..scanner import Candidate
 from ..storage import DuckDBStore
 from ..strategy.service import StrategyFeatureService
+from .dashboard import dashboard_patch, dashboard_snapshot
 
 WEB_DIR = Path(__file__).parents[3] / "web"
+
+
+class ConfirmationRequest(BaseModel):
+    confirm: bool
 
 
 def create_app(settings: Settings | None = None, *, start_scanner: bool = True) -> FastAPI:
@@ -140,7 +146,8 @@ def create_app(settings: Settings | None = None, *, start_scanner: bool = True) 
             "rest": rest_status,
             "websocket": websocket_status,
             "database": "healthy",
-            "emergency_stop": bool(request.app.state.emergency_stop),
+            "entries_paused": bool(request.app.state.risk_manager.entries_paused),
+            "emergency_stop": bool(request.app.state.risk_manager.emergency_stopped),
             "last_error": last_error,
             "checked_at_utc": datetime.now(UTC),
             "checked_at_asia_shanghai": datetime.now(UTC).astimezone(ZoneInfo("Asia/Shanghai")),
@@ -177,8 +184,26 @@ def create_app(settings: Settings | None = None, *, start_scanner: bool = True) 
         broker: PaperBroker = request.app.state.paper_broker
         return broker.performance()
 
+    @app.get("/api/dashboard")
+    async def dashboard_http(request: Request) -> dict[str, Any]:
+        return await dashboard_snapshot(request.app)
+
+    @app.post("/api/paper/pause")
+    async def pause_entries(request: Request) -> dict[str, bool]:
+        risk: RiskManager = request.app.state.risk_manager
+        risk.pause_entries()
+        return {"entries_paused": True}
+
+    @app.post("/api/paper/resume")
+    async def resume_entries(request: Request) -> dict[str, bool]:
+        risk: RiskManager = request.app.state.risk_manager
+        risk.resume_entries()
+        return {"entries_paused": False}
+
     @app.post("/api/paper/reset")
-    async def reset_paper(request: Request) -> dict[str, bool]:
+    async def reset_paper(request: Request, confirmation: ConfirmationRequest) -> dict[str, bool]:
+        if not confirmation.confirm:
+            raise HTTPException(status_code=400, detail="Explicit confirmation is required")
         broker: PaperBroker = request.app.state.paper_broker
         try:
             await asyncio.to_thread(broker.reset)
@@ -188,7 +213,11 @@ def create_app(settings: Settings | None = None, *, start_scanner: bool = True) 
         return {"reset": True}
 
     @app.post("/api/emergency-stop")
-    async def emergency_stop(request: Request) -> dict[str, bool]:
+    async def emergency_stop(
+        request: Request, confirmation: ConfirmationRequest
+    ) -> dict[str, bool]:
+        if not confirmation.confirm:
+            raise HTTPException(status_code=400, detail="Explicit confirmation is required")
         broker: PaperBroker = request.app.state.paper_broker
         broker.emergency_close_all(datetime.now(UTC))
         request.app.state.emergency_stop = True
@@ -197,22 +226,21 @@ def create_app(settings: Settings | None = None, *, start_scanner: bool = True) 
     @app.websocket("/ws/dashboard")
     async def dashboard(websocket: WebSocket) -> None:
         await websocket.accept()
+        revision = 1
+        previous = await dashboard_snapshot(websocket.app)
+        await websocket.send_json({"type": "snapshot", "revision": revision, "data": previous})
         try:
             while True:
-                await websocket.send_json(await health_for_websocket(websocket, configured))
-                await asyncio.sleep(2)
+                await asyncio.sleep(1)
+                current = await dashboard_snapshot(websocket.app)
+                changes = dashboard_patch(previous, current)
+                if changes:
+                    revision += 1
+                    await websocket.send_json(
+                        {"type": "patch", "revision": revision, "changes": changes}
+                    )
+                    previous = current
         except WebSocketDisconnect:
             return
 
     return app
-
-
-async def health_for_websocket(websocket: WebSocket, settings: Settings) -> dict[str, object]:
-    """Build a compact dashboard snapshot without a network dependency."""
-    store: DuckDBStore = websocket.app.state.store
-    return {
-        "type": "dashboard",
-        "mode": settings.app_mode.value,
-        "candidates": await asyncio.to_thread(store.list_candidates),
-        "timestamp_utc": datetime.now(UTC).isoformat(),
-    }

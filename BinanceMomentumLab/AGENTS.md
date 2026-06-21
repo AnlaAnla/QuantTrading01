@@ -23,6 +23,9 @@ hard-disabled.
 - Keep every strategy threshold in `Settings` and `.env.example`.
 - Preserve deterministic replay: never use wall-clock time or random IDs in feature/state logic.
 - Inject network clients so tests remain offline and deterministic.
-- Never log secrets. API keys may only be shown as first four and last four characters.
+- Never log secrets. Public configuration, dashboard payloads, and browser pages must not expose
+  API keys or API secrets, including masked values.
+- Keep the dashboard dependency-free: native HTML, CSS, and JavaScript only. Dangerous paper
+  controls require confirmation in both the browser and the API request.
 - Add focused tests with every behavior change.
 - Run `ruff check .`, `ruff format --check .`, `mypy`, and `pytest` before handoff.
