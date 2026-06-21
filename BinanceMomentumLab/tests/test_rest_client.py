@@ -81,3 +81,28 @@ async def test_rate_limit_fails_closed_after_retry_budget() -> None:
     with pytest.raises(BinanceRateLimitError, match="HTTP 418"):
         await client.tickers_24h()
     await http_client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_parses_depth_snapshot_for_local_order_book() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/fapi/v1/depth"
+        return httpx.Response(
+            200,
+            json={
+                "lastUpdateId": 100,
+                "bids": [["42000.0", "2.5"]],
+                "asks": [["42001.0", "1.5"]],
+            },
+        )
+
+    http_client = httpx.AsyncClient(
+        transport=httpx.MockTransport(handler), base_url="https://example.test"
+    )
+    client = BinancePublicRESTClient("https://example.test", client=http_client)
+
+    snapshot = await client.depth_snapshot("BTCUSDT")
+
+    assert snapshot.last_update_id == 100
+    assert str(snapshot.bids[0][1]) == "2.5"
+    await http_client.aclose()

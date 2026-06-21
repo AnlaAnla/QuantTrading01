@@ -38,7 +38,11 @@
       const fmt = (v, digits=2) => Number(v).toLocaleString('zh-CN', {maximumFractionDigits: digits});
       async function refresh() {
         const [health, candidates] = await Promise.all([fetch('/api/health').then(r => r.json()), fetch('/api/candidates').then(r => r.json())]);
-        mode.textContent = health.mode; rest.textContent = health.rest; ws.textContent = health.websocket; db.textContent = health.database;
+        mode.textContent = health.mode; rest.textContent = health.rest;
+        ws.textContent = typeof health.websocket === 'object'
+          ? Object.entries(health.websocket.routes).map(([name, value]) => `${name}: ${value.status}`).join(' · ')
+          : health.websocket;
+        db.textContent = health.database;
         time.textContent = new Date(health.checked_at_utc).toLocaleTimeString('zh-CN', {timeZone:'Asia/Shanghai'});
         rows.innerHTML = candidates.length ? candidates.map(c => `<tr><td>${c.symbol}</td><td>${fmt(c.price_change_24h_percent)}%</td><td>${fmt(c.price_change_5m_percent)}%</td><td>${fmt(c.quote_volume_24h, 0)}</td><td>${fmt(c.volume_zscore)}</td></tr>`).join('') : '<tr><td colspan="5" class="empty">等待首次扫描结果</td></tr>';
       }
@@ -46,4 +50,3 @@
     </script>
   </body>
 </html>
-

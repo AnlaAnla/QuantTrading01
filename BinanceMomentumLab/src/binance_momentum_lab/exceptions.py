@@ -23,3 +23,15 @@ class BinanceAPIError(MomentumLabError):
 
 class BinanceRateLimitError(BinanceAPIError):
     """Raised after Binance returns HTTP 429 or 418."""
+
+
+class WebSocketProtocolError(MomentumLabError):
+    """Raised when a market stream message violates its documented shape."""
+
+
+class OrderBookNotSynchronizedError(MomentumLabError):
+    """Raised when an order book is queried before snapshot alignment."""
+
+
+class OrderBookSequenceGapError(MomentumLabError):
+    """Raised when depth update IDs are discontinuous and resync is required."""

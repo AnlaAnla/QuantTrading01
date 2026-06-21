@@ -2,9 +2,10 @@
 
 ## Scope
 
-This repository is a safety-first market-data research system. Phase one contains no execution
-path. Never add real-money order placement, withdrawal, or transfer behavior without a separately
-approved phase and explicit safety review. LIVE mode must remain hard-disabled.
+This repository is a safety-first market-data research system. The REST and WebSocket market-data
+layers contain no execution path. Never add real-money order placement, withdrawal, or transfer
+behavior without a separately approved phase and explicit safety review. LIVE mode must remain
+hard-disabled.
 
 ## Engineering rules
 
@@ -16,4 +17,3 @@ approved phase and explicit safety review. LIVE mode must remain hard-disabled.
 - Never log secrets. API keys may only be shown as first four and last four characters.
 - Add focused tests with every behavior change.
 - Run `ruff check .`, `ruff format --check .`, `mypy`, and `pytest` before handoff.
-

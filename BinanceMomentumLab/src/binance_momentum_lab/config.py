@@ -58,6 +58,18 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     demo_data: bool = False
 
+    ws_rotation_seconds: float = Field(default=85800, gt=0, le=86400)
+    ws_reconnect_base_seconds: float = Field(default=1, gt=0)
+    ws_reconnect_max_seconds: float = Field(default=30, gt=0)
+    ws_queue_maxsize: int = Field(default=10000, ge=100, le=1_000_000)
+    ws_stale_after_seconds: float = Field(default=3, gt=0)
+    ws_ping_interval_seconds: float = Field(default=180, gt=0)
+    ws_ping_timeout_seconds: float = Field(default=600, gt=0)
+    order_book_depth_limit: int = Field(default=1000, ge=5, le=1000)
+    parquet_root: Path = Path("data/raw_events")
+    parquet_batch_size: int = Field(default=1000, ge=1, le=100_000)
+    parquet_flush_seconds: float = Field(default=5, gt=0)
+
     @field_validator("binance_mainnet_ws_url", "binance_demo_ws_url")
     @classmethod
     def validate_websocket_url(cls, value: str) -> str:

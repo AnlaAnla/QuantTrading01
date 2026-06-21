@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Awaitable, Callable
 from contextlib import suppress
 from datetime import UTC, datetime
 
 from .binance.client import BinancePublicRESTClient
 from .config import Settings
 from .demo import DemoPublicMarketDataClient
-from .scanner import MarketScanner
+from .scanner import Candidate, MarketScanner
 from .storage import DuckDBStore
 
 LOGGER = logging.getLogger(__name__)
@@ -19,7 +20,12 @@ LOGGER = logging.getLogger(__name__)
 class ScannerRuntime:
     """Own the public REST client and graceful periodic scanner task."""
 
-    def __init__(self, settings: Settings, store: DuckDBStore) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        store: DuckDBStore,
+        on_candidates: Callable[[list[Candidate]], Awaitable[None]] | None = None,
+    ) -> None:
         self.settings = settings
         self.store = store
         self.client: BinancePublicRESTClient | DemoPublicMarketDataClient
@@ -36,6 +42,7 @@ class ScannerRuntime:
         self.rest_status = "starting"
         self.last_error: str | None = None
         self.started_at = datetime.now(UTC)
+        self._on_candidates = on_candidates
 
     def start(self) -> None:
         """Start the periodic scan loop without blocking API startup."""
@@ -54,6 +61,8 @@ class ScannerRuntime:
             try:
                 candidates = await self.scanner.scan_once()
                 await asyncio.to_thread(self.store.replace_candidates, candidates)
+                if self._on_candidates is not None:
+                    await self._on_candidates(candidates)
                 self.rest_status = "healthy"
                 self.last_error = None
                 await asyncio.to_thread(self.store.record_health, "rest", "healthy", None)

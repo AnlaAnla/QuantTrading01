@@ -9,6 +9,7 @@ import pytest
 
 from binance_momentum_lab.binance.models import ExchangeInfo, Kline, Ticker24h
 from binance_momentum_lab.config import Settings
+from binance_momentum_lab.market_data.order_book import DepthSnapshot
 from binance_momentum_lab.scanner import (
     MarketScanner,
     calculate_five_minute_metrics,
@@ -115,6 +116,10 @@ class FakeMarketDataClient:
         assert interval == "1m"
         assert limit == 306
         return make_klines()
+
+    async def depth_snapshot(self, symbol: str, limit: int = 1000) -> DepthSnapshot:
+        del symbol, limit
+        return DepthSnapshot(last_update_id=0, bids=(), asks=())
 
 
 @pytest.mark.asyncio

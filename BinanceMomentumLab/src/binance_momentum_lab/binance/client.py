@@ -5,11 +5,13 @@ from __future__ import annotations
 import asyncio
 import random
 from collections.abc import Awaitable, Callable
+from decimal import Decimal
 from typing import Any, Protocol, cast
 
 import httpx
 
 from ..exceptions import BinanceAPIError, BinanceRateLimitError
+from ..market_data.order_book import DepthSnapshot
 from .models import ExchangeInfo, Kline, Ticker24h
 
 Sleep = Callable[[float], Awaitable[None]]
@@ -28,6 +30,10 @@ class PublicMarketDataClient(Protocol):
 
     async def klines(self, symbol: str, interval: str, limit: int) -> list[Kline]:
         """Fetch candlesticks for one symbol."""
+        ...
+
+    async def depth_snapshot(self, symbol: str, limit: int = 1000) -> DepthSnapshot:
+        """Fetch a REST order-book snapshot for local depth alignment."""
         ...
 
 
@@ -87,6 +93,24 @@ class BinancePublicRESTClient:
         if not isinstance(payload, list):
             raise BinanceAPIError("Expected a list from kline endpoint")
         return [Kline.from_payload(cast(list[Any], row)) for row in payload]
+
+    async def depth_snapshot(self, symbol: str, limit: int = 1000) -> DepthSnapshot:
+        """Fetch GET /fapi/v1/depth for local order-book initialization."""
+        payload = await self._get_json("/fapi/v1/depth", params={"symbol": symbol, "limit": limit})
+        if not isinstance(payload, dict):
+            raise BinanceAPIError("Expected an object from depth endpoint")
+        try:
+            return DepthSnapshot(
+                last_update_id=int(payload["lastUpdateId"]),
+                bids=tuple(
+                    (Decimal(str(level[0])), Decimal(str(level[1]))) for level in payload["bids"]
+                ),
+                asks=tuple(
+                    (Decimal(str(level[0])), Decimal(str(level[1]))) for level in payload["asks"]
+                ),
+            )
+        except (KeyError, TypeError, ValueError, IndexError) as exc:
+            raise BinanceAPIError("Invalid depth snapshot payload") from exc
 
     async def _get_json(
         self,

@@ -14,7 +14,7 @@ def test_health_and_public_config_are_safe() -> None:
 
     assert health.status_code == 200
     assert health.json()["status"] == "ok"
-    assert health.json()["websocket"] == "not_implemented_phase_one"
+    assert health.json()["websocket"] == "disabled_for_test"
     assert "secret" not in str(public_config.json()).lower()
 
 

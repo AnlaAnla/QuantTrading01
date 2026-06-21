@@ -6,6 +6,7 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 from .binance.models import ExchangeInfo, ExchangeSymbol, Kline, Ticker24h
+from .market_data.order_book import DepthSnapshot
 
 
 class DemoPublicMarketDataClient:
@@ -83,3 +84,12 @@ class DemoPublicMarketDataClient:
 
     async def aclose(self) -> None:
         """Match the live client's lifecycle contract."""
+
+    async def depth_snapshot(self, symbol: str, limit: int = 1000) -> DepthSnapshot:
+        """Return a tiny deterministic book for offline runtime demonstrations."""
+        del symbol, limit
+        return DepthSnapshot(
+            last_update_id=100,
+            bids=((Decimal("1.0"), Decimal("10")),),
+            asks=((Decimal("1.1"), Decimal("10")),),
+        )

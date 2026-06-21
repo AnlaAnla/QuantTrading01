@@ -15,7 +15,10 @@ from fastapi.responses import FileResponse
 
 from ..config import Settings, get_settings
 from ..logging_config import configure_logging
+from ..market_data.candidates import DynamicCandidateManager
+from ..market_data.service import RealtimeMarketDataService
 from ..runtime import ScannerRuntime
+from ..scanner import Candidate
 from ..storage import DuckDBStore
 
 WEB_DIR = Path(__file__).parents[3] / "web"
@@ -31,16 +34,37 @@ def create_app(settings: Settings | None = None, *, start_scanner: bool = True) 
         configure_logging(configured.log_level)
         store = DuckDBStore(configured.database_path)
         await asyncio.to_thread(store.initialize)
-        runtime = ScannerRuntime(configured, store) if start_scanner else None
+        candidate_manager = DynamicCandidateManager()
+
+        async def publish_candidates(items: list[Candidate]) -> None:
+            await candidate_manager.update(item.symbol for item in items)
+
+        runtime = (
+            ScannerRuntime(configured, store, on_candidates=publish_candidates)
+            if start_scanner
+            else None
+        )
+        realtime = (
+            RealtimeMarketDataService(configured, runtime.client, store)
+            if runtime is not None and not configured.demo_data
+            else None
+        )
+        if realtime is not None:
+            candidate_manager.subscribe(realtime.update_symbols)
         app.state.settings = configured
         app.state.store = store
         app.state.runtime = runtime
+        app.state.realtime = realtime
         app.state.emergency_stop = False
         if runtime is not None:
+            if realtime is not None:
+                realtime.start()
             runtime.start()
         try:
             yield
         finally:
+            if realtime is not None:
+                await realtime.stop()
             if runtime is not None:
                 await runtime.stop()
             await asyncio.to_thread(store.close)
@@ -54,13 +78,20 @@ def create_app(settings: Settings | None = None, *, start_scanner: bool = True) 
     @app.get("/api/health")
     async def health(request: Request) -> dict[str, Any]:
         runtime: ScannerRuntime | None = request.app.state.runtime
+        realtime: RealtimeMarketDataService | None = request.app.state.realtime
         rest_status = runtime.rest_status if runtime else "disabled_for_test"
         last_error = runtime.last_error if runtime else None
+        if realtime is not None:
+            websocket_status: object = realtime.health.snapshot()
+        elif configured.demo_data:
+            websocket_status = "disabled_demo_data"
+        else:
+            websocket_status = "disabled_for_test"
         return {
             "status": "ok" if rest_status != "degraded" else "degraded",
             "mode": configured.app_mode.value,
             "rest": rest_status,
-            "websocket": "not_implemented_phase_one",
+            "websocket": websocket_status,
             "database": "healthy",
             "emergency_stop": bool(request.app.state.emergency_stop),
             "last_error": last_error,
