@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Binance Momentum Lab</title>
+    <style>
+      :root { color-scheme: dark; font-family: Inter, system-ui, sans-serif; }
+      body { margin: 0; background: #07111f; color: #dce7f5; }
+      main { width: min(1120px, 92vw); margin: 48px auto; }
+      header { display: flex; justify-content: space-between; align-items: end; gap: 24px; }
+      h1 { margin: 0; font-size: clamp(2rem, 5vw, 4rem); letter-spacing: -.05em; }
+      .muted { color: #8092a8; }
+      .badge { padding: 8px 12px; border: 1px solid #18c99866; border-radius: 999px; color: #51e2b8; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin: 34px 0; }
+      .card { background: #0d1b2c; border: 1px solid #1b3048; border-radius: 14px; padding: 18px; }
+      .value { margin-top: 8px; font-size: 1.35rem; font-weight: 650; }
+      table { width: 100%; border-collapse: collapse; background: #0d1b2c; border-radius: 14px; overflow: hidden; }
+      th, td { text-align: right; padding: 14px; border-bottom: 1px solid #1b3048; }
+      th:first-child, td:first-child { text-align: left; }
+      th { color: #8092a8; font-size: .8rem; text-transform: uppercase; }
+      .empty { text-align: center !important; color: #8092a8; padding: 32px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header><div><p class="muted">USDⓈ-M Futures · Research only</p><h1>Momentum Lab</h1></div><span class="badge" id="mode">加载中</span></header>
+      <section class="grid">
+        <div class="card"><span class="muted">REST</span><div class="value" id="rest">—</div></div>
+        <div class="card"><span class="muted">WebSocket</span><div class="value" id="ws">—</div></div>
+        <div class="card"><span class="muted">数据库</span><div class="value" id="db">—</div></div>
+        <div class="card"><span class="muted">上海时间</span><div class="value" id="time">—</div></div>
+      </section>
+      <h2>当前候选</h2>
+      <table><thead><tr><th>Symbol</th><th>24h 涨幅</th><th>5m 涨幅</th><th>24h 成交额</th><th>Volume Z</th></tr></thead><tbody id="rows"></tbody></table>
+    </main>
+    <script>
+      const fmt = (v, digits=2) => Number(v).toLocaleString('zh-CN', {maximumFractionDigits: digits});
+      async function refresh() {
+        const [health, candidates] = await Promise.all([fetch('/api/health').then(r => r.json()), fetch('/api/candidates').then(r => r.json())]);
+        mode.textContent = health.mode; rest.textContent = health.rest; ws.textContent = health.websocket; db.textContent = health.database;
+        time.textContent = new Date(health.checked_at_utc).toLocaleTimeString('zh-CN', {timeZone:'Asia/Shanghai'});
+        rows.innerHTML = candidates.length ? candidates.map(c => `<tr><td>${c.symbol}</td><td>${fmt(c.price_change_24h_percent)}%</td><td>${fmt(c.price_change_5m_percent)}%</td><td>${fmt(c.quote_volume_24h, 0)}</td><td>${fmt(c.volume_zscore)}</td></tr>`).join('') : '<tr><td colspan="5" class="empty">等待首次扫描结果</td></tr>';
+      }
+      refresh(); setInterval(refresh, 5000);
+    </script>
+  </body>
+</html>
+

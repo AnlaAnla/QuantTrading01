@@ -1,0 +1,31 @@
+{
+  "timezone": "UTC",
+  "serverTime": 1700000000000,
+  "symbols": [
+    {
+      "symbol": "ALPHAUSDT",
+      "status": "TRADING",
+      "contractType": "PERPETUAL",
+      "quoteAsset": "USDT",
+      "baseAsset": "ALPHA",
+      "marginAsset": "USDT"
+    },
+    {
+      "symbol": "DELIVEREDUSDT",
+      "status": "SETTLING",
+      "contractType": "PERPETUAL",
+      "quoteAsset": "USDT",
+      "baseAsset": "DELIVERED",
+      "marginAsset": "USDT"
+    },
+    {
+      "symbol": "ALPHAUSDC",
+      "status": "TRADING",
+      "contractType": "PERPETUAL",
+      "quoteAsset": "USDC",
+      "baseAsset": "ALPHA",
+      "marginAsset": "USDC"
+    }
+  ]
+}
+
