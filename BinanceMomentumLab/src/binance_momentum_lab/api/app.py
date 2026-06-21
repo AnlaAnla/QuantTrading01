@@ -20,6 +20,7 @@ from ..market_data.service import RealtimeMarketDataService
 from ..runtime import ScannerRuntime
 from ..scanner import Candidate
 from ..storage import DuckDBStore
+from ..strategy.service import StrategyFeatureService
 
 WEB_DIR = Path(__file__).parents[3] / "web"
 
@@ -37,7 +38,9 @@ def create_app(settings: Settings | None = None, *, start_scanner: bool = True) 
         candidate_manager = DynamicCandidateManager()
 
         async def publish_candidates(items: list[Candidate]) -> None:
-            await candidate_manager.update(item.symbol for item in items)
+            symbols = {item.symbol for item in items}
+            symbols.add(configured.feature_benchmark_symbol)
+            await candidate_manager.update(symbols)
 
         runtime = (
             ScannerRuntime(configured, store, on_candidates=publish_candidates)
@@ -51,22 +54,43 @@ def create_app(settings: Settings | None = None, *, start_scanner: bool = True) 
         )
         if realtime is not None:
             candidate_manager.subscribe(realtime.update_symbols)
+        strategy = (
+            StrategyFeatureService(
+                configured,
+                runtime.client,
+                store,
+                realtime.books.books,
+            )
+            if runtime is not None and realtime is not None
+            else None
+        )
+        if strategy is not None:
+            candidate_manager.subscribe(strategy.update_symbols)
+            assert realtime is not None
+            realtime.subscribe(strategy.on_event)
         app.state.settings = configured
         app.state.store = store
         app.state.runtime = runtime
         app.state.realtime = realtime
+        app.state.strategy = strategy
         app.state.emergency_stop = False
         if runtime is not None:
             if realtime is not None:
                 realtime.start()
+            if strategy is not None:
+                strategy.start()
             runtime.start()
         try:
             yield
         finally:
+            if runtime is not None:
+                await runtime.stop(close_client=False)
+            if strategy is not None:
+                await strategy.stop()
             if realtime is not None:
                 await realtime.stop()
             if runtime is not None:
-                await runtime.stop()
+                await runtime.client.aclose()
             await asyncio.to_thread(store.close)
 
     app = FastAPI(title="BinanceMomentumLab", version="0.1.0", lifespan=lifespan)
@@ -108,12 +132,16 @@ def create_app(settings: Settings | None = None, *, start_scanner: bool = True) 
         store: DuckDBStore = request.app.state.store
         return await asyncio.to_thread(store.list_candidates)
 
-    @app.get("/api/signals")
     @app.get("/api/positions")
     @app.get("/api/orders")
     @app.get("/api/trades")
     async def phase_two_empty_collections() -> list[object]:
         return []
+
+    @app.get("/api/signals")
+    async def signals(request: Request) -> list[dict[str, Any]]:
+        store: DuckDBStore = request.app.state.store
+        return await asyncio.to_thread(store.list_signals)
 
     @app.get("/api/performance")
     async def performance() -> dict[str, object]:

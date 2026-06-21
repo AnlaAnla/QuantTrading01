@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
-from .binance.models import ExchangeInfo, ExchangeSymbol, Kline, Ticker24h
+from .binance.models import ExchangeInfo, ExchangeSymbol, Kline, OpenInterest, Ticker24h
 from .market_data.order_book import DepthSnapshot
 
 
@@ -92,4 +92,11 @@ class DemoPublicMarketDataClient:
             last_update_id=100,
             bids=((Decimal("1.0"), Decimal("10")),),
             asks=((Decimal("1.1"), Decimal("10")),),
+        )
+
+    async def open_interest(self, symbol: str) -> OpenInterest:
+        return OpenInterest(
+            symbol=symbol,
+            value=Decimal("100000"),
+            time_ms=int(datetime.now(UTC).timestamp() * 1000),
         )

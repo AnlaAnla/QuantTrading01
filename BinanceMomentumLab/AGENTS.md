@@ -13,6 +13,9 @@ hard-disabled.
 - Use `Decimal` for prices, quantities, quote volume, balances, and monetary calculations.
 - Keep internal timestamps timezone-aware and in UTC.
 - Keep market data, strategy, risk, and execution boundaries separate.
+- Strategy output is research-only: structured signals must never submit or imply orders.
+- Keep every strategy threshold in `Settings` and `.env.example`.
+- Preserve deterministic replay: never use wall-clock time or random IDs in feature/state logic.
 - Inject network clients so tests remain offline and deterministic.
 - Never log secrets. API keys may only be shown as first four and last four characters.
 - Add focused tests with every behavior change.

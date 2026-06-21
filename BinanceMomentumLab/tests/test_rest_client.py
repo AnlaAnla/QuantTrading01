@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from decimal import Decimal
+
 import httpx
 import pytest
 
@@ -105,4 +107,26 @@ async def test_parses_depth_snapshot_for_local_order_book() -> None:
 
     assert snapshot.last_update_id == 100
     assert str(snapshot.bids[0][1]) == "2.5"
+    await http_client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_parses_public_open_interest() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/fapi/v1/openInterest"
+        assert request.url.params["symbol"] == "BTCUSDT"
+        return httpx.Response(
+            200,
+            json={"openInterest": "10659.509", "symbol": "BTCUSDT", "time": 1589437530011},
+        )
+
+    http_client = httpx.AsyncClient(
+        transport=httpx.MockTransport(handler), base_url="https://example.test"
+    )
+    client = BinancePublicRESTClient("https://example.test", client=http_client)
+
+    result = await client.open_interest("BTCUSDT")
+
+    assert result.value == Decimal("10659.509")
+    assert result.timestamp.tzinfo is not None
     await http_client.aclose()

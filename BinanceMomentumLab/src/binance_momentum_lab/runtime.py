@@ -48,13 +48,14 @@ class ScannerRuntime:
         """Start the periodic scan loop without blocking API startup."""
         self.task = asyncio.create_task(self._run(), name="market-scanner")
 
-    async def stop(self) -> None:
+    async def stop(self, *, close_client: bool = True) -> None:
         """Cancel work and close the HTTP pool gracefully."""
         if self.task is not None:
             self.task.cancel()
             with suppress(asyncio.CancelledError):
                 await self.task
-        await self.client.aclose()
+        if close_client:
+            await self.client.aclose()
 
     async def _run(self) -> None:
         while True:

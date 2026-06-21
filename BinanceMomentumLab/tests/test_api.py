@@ -16,6 +16,7 @@ def test_health_and_public_config_are_safe() -> None:
     assert health.json()["status"] == "ok"
     assert health.json()["websocket"] == "disabled_for_test"
     assert "secret" not in str(public_config.json()).lower()
+    assert public_config.json()["strategy_thresholds"]["max_spread_bps"] == "8"
 
 
 def test_paper_reset_is_explicitly_unavailable_and_emergency_stop_works() -> None:

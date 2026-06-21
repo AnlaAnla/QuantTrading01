@@ -1,0 +1,8 @@
+{
+  "aggTrade": {"stream":"btcusdt@aggTrade","data":{"e":"aggTrade","E":1700000000100,"s":"BTCUSDT","a":42,"p":"42000.10","q":"0.25","f":100,"l":102,"T":1700000000090,"m":false}},
+  "markPrice": {"stream":"btcusdt@markPrice@1s","data":{"e":"markPriceUpdate","E":1700000000200,"s":"BTCUSDT","p":"42001.1","i":"42000.0","P":"41999.9","r":"0.0001","T":1700028800000}},
+  "bookTicker": {"stream":"btcusdt@bookTicker","data":{"e":"bookTicker","u":500,"s":"BTCUSDT","E":1700000000300,"T":1700000000299,"b":"42000.0","B":"1.2","a":"42000.1","A":"0.8"}},
+  "depth": {"stream":"btcusdt@depth@100ms","data":{"e":"depthUpdate","E":1700000000400,"T":1700000000399,"s":"BTCUSDT","U":101,"u":102,"pu":100,"b":[["42000.0","2.0"],["41999.0","0"]],"a":[["42001.0","0"],["42002.0","3.0"]]}},
+  "forceOrder": {"stream":"btcusdt@forceOrder","data":{"e":"forceOrder","E":1700000000500,"o":{"s":"BTCUSDT","S":"SELL","o":"LIMIT","f":"IOC","q":"0.014","p":"42000","ap":"41990","X":"FILLED","l":"0.014","z":"0.014","T":1700000000490}}},
+  "kline": {"stream":"btcusdt@kline_1m","data":{"e":"kline","E":1700000000600,"s":"BTCUSDT","k":{"t":1699999980000,"T":1700000039999,"s":"BTCUSDT","i":"1m","f":100,"L":200,"o":"42000","c":"42100","h":"42120","l":"41980","v":"12.5","n":80,"x":false,"q":"525000","V":"7.5","Q":"315000","B":"0"}}}
+}

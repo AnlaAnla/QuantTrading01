@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Iterable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -11,6 +12,7 @@ from typing import Any
 import duckdb
 
 from .scanner import Candidate
+from .strategy.models import FeatureSnapshot, StrategySignal, StrategyState
 
 SCHEMA_STATEMENTS = (
     """
@@ -188,6 +190,59 @@ class DuckDBStore:
                 """,
                 [component, status, now, detail],
             )
+
+    def save_feature_snapshot(self, snapshot: FeatureSnapshot) -> None:
+        payload = snapshot.model_dump_json()
+        with self._lock:
+            self._connection.execute(
+                """
+                INSERT INTO feature_snapshots VALUES (?, ?, ?)
+                ON CONFLICT (symbol, observed_at) DO UPDATE SET
+                    features_json = excluded.features_json
+                """,
+                [snapshot.symbol, snapshot.timestamp, payload],
+            )
+
+    def save_signal(self, signal: StrategySignal) -> None:
+        with self._lock:
+            self._connection.execute(
+                """
+                INSERT INTO signals VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT (signal_id) DO NOTHING
+                """,
+                [
+                    signal.signal_id,
+                    signal.symbol,
+                    signal.timestamp,
+                    signal.side.value,
+                    signal.model_dump_json(),
+                ],
+            )
+
+    def save_strategy_state(self, symbol: str, state: StrategyState, timestamp: datetime) -> None:
+        payload = json.dumps({"state": state.value})
+        with self._lock:
+            self._connection.execute(
+                """
+                INSERT INTO strategy_state VALUES (?, ?, ?, ?)
+                ON CONFLICT (symbol) DO UPDATE SET
+                    state = excluded.state,
+                    updated_at = excluded.updated_at,
+                    payload_json = excluded.payload_json
+                """,
+                [symbol, state.value, timestamp, payload],
+            )
+
+    def list_signals(self, limit: int = 100) -> list[dict[str, Any]]:
+        with self._lock:
+            rows = self._connection.execute(
+                """
+                SELECT payload_json FROM signals
+                ORDER BY created_at DESC LIMIT ?
+                """,
+                [limit],
+            ).fetchall()
+        return [json.loads(str(row[0])) for row in rows]
 
     def table_names(self) -> set[str]:
         """Expose initialized table names for diagnostics and tests."""

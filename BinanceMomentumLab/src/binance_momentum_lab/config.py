@@ -70,6 +70,28 @@ class Settings(BaseSettings):
     parquet_batch_size: int = Field(default=1000, ge=1, le=100_000)
     parquet_flush_seconds: float = Field(default=5, gt=0)
 
+    feature_volume_baseline_windows: int = Field(default=60, ge=2, le=288)
+    feature_cvd_window_seconds: int = Field(default=300, ge=60, le=3600)
+    feature_oi_window_seconds: int = Field(default=300, ge=60, le=3600)
+    feature_benchmark_symbol: str = "BTCUSDT"
+    feature_btc_beta: Decimal = Decimal("1")
+    oi_poll_interval_seconds: float = Field(default=15, gt=0)
+
+    strategy_watch_return_5m_percent: Decimal = Decimal("1.5")
+    strategy_watch_volume_zscore: Decimal = Decimal("2.5")
+    strategy_ignition_return_5m_percent: Decimal = Decimal("3")
+    strategy_long_volume_zscore: Decimal = Decimal("4")
+    strategy_long_taker_buy_ratio: Decimal = Field(default=Decimal("0.58"), ge=0, le=1)
+    strategy_long_oi_change_5m_percent: Decimal = Decimal("1")
+    strategy_max_spread_bps: Decimal = Field(default=Decimal("8"), ge=0)
+    strategy_pullback_min_ratio: Decimal = Field(default=Decimal("0.20"), ge=0, le=1)
+    strategy_pullback_max_ratio: Decimal = Field(default=Decimal("0.50"), ge=0, le=1)
+    strategy_pullback_volume_ratio_max: Decimal = Field(default=Decimal("0.80"), ge=0, le=1)
+    strategy_buy_absorption_taker_ratio: Decimal = Field(default=Decimal("0.60"), ge=0, le=1)
+    strategy_buy_absorption_max_return_1m_percent: Decimal = Decimal("0.10")
+    strategy_short_taker_sell_ratio: Decimal = Field(default=Decimal("0.55"), ge=0, le=1)
+    strategy_cooldown_seconds: int = Field(default=1800, ge=1)
+
     @field_validator("binance_mainnet_ws_url", "binance_demo_ws_url")
     @classmethod
     def validate_websocket_url(cls, value: str) -> str:
@@ -77,6 +99,11 @@ class Settings(BaseSettings):
         if not value.startswith("wss://"):
             raise ValueError("Binance WebSocket URLs must use wss://")
         return value.rstrip("/")
+
+    @field_validator("feature_benchmark_symbol")
+    @classmethod
+    def normalize_benchmark_symbol(cls, value: str) -> str:
+        return value.upper()
 
     def startup_safety_check(self) -> None:
         """Fail closed for all execution modes unavailable in phase one."""
@@ -103,6 +130,19 @@ class Settings(BaseSettings):
             "max_candidates": self.max_candidates,
             "demo_data": self.demo_data,
             "api_key_masked": mask_api_key(self.binance_api_key),
+            "strategy_thresholds": {
+                "watch_return_5m_percent": str(self.strategy_watch_return_5m_percent),
+                "watch_volume_zscore": str(self.strategy_watch_volume_zscore),
+                "ignition_return_5m_percent": str(self.strategy_ignition_return_5m_percent),
+                "long_volume_zscore": str(self.strategy_long_volume_zscore),
+                "long_taker_buy_ratio": str(self.strategy_long_taker_buy_ratio),
+                "long_oi_change_5m_percent": str(self.strategy_long_oi_change_5m_percent),
+                "max_spread_bps": str(self.strategy_max_spread_bps),
+                "pullback_min_ratio": str(self.strategy_pullback_min_ratio),
+                "pullback_max_ratio": str(self.strategy_pullback_max_ratio),
+                "short_taker_sell_ratio": str(self.strategy_short_taker_sell_ratio),
+                "cooldown_seconds": self.strategy_cooldown_seconds,
+            },
         }
 
 

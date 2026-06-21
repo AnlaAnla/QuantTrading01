@@ -75,12 +75,28 @@ bash scripts/test.sh
 原始事件按 `date=YYYY-MM-DD/symbol=...` 写入 Parquet。`forceOrder` 只表示每个币种
 每 1000ms 窗口中的最大爆仓订单快照，不能当作完整爆仓成交量。
 
+## 特征与策略状态
+
+新候选先由公开 REST Kline 预热，再由实时事件增量计算 1m/3m/5m/15m 收益、5m
+成交额与 Z-Score、taker buy ratio、CVD 与斜率、事件锚定 VWAP、5m OI 变化、funding、
+basis、spread、前 5/20 档盘口不平衡以及相对 BTC 的残差收益。OI 使用公开的
+`GET /fapi/v1/openInterest` 定期采样。
+
+策略状态依次描述 `NORMAL`、`WATCH`、`IGNITION`、`PULLBACK`、`CONTINUATION`、
+`DISTRIBUTION`、`BREAKDOWN`、`COOLDOWN`。状态机只生成可解释的 LONG/SHORT 研究
+信号，不连接任何 Broker。信号包含稳定 ID、参考入场/止损、完整特征快照、结构化
+`reason_codes` 和结构化失效条件。同一历史事件序列会生成完全相同的状态与信号 ID。
+
+所有数值阈值均位于 `.env.example` 和 `Settings`，百分比使用百分点单位，例如 3%
+配置为 `3`。
+
 ## 官方接口依据
 
 - [USDⓈ-M Futures General Info](https://developers.binance.com/docs/derivatives/usds-margined-futures/general-info)
 - [Exchange Information](https://developers.binance.com/docs/derivatives/usds-margined-futures/market-data/rest-api/Exchange-Information)
 - [24hr Ticker Price Change Statistics](https://developers.binance.com/docs/derivatives/usds-margined-futures/market-data/rest-api/24hr-Ticker-Price-Change-Statistics)
 - [Kline/Candlestick Data](https://developers.binance.com/docs/derivatives/usds-margined-futures/market-data/rest-api/Kline-Candlestick-Data)
+- [Open Interest](https://developers.binance.com/docs/derivatives/usds-margined-futures/market-data/rest-api/Open-Interest)
 - [WebSocket Market Streams](https://developers.binance.com/docs/derivatives/usds-margined-futures/websocket-market-streams)
 - [Aggregate Trade Streams](https://developers.binance.com/docs/derivatives/usds-margined-futures/websocket-market-streams/Aggregate-Trade-Streams)
 - [Liquidation Order Streams](https://developers.binance.com/docs/derivatives/usds-margined-futures/websocket-market-streams/Liquidation-Order-Streams)
@@ -88,5 +104,5 @@ bash scripts/test.sh
 
 ## 第一阶段以外
 
-实时特征、状态机、PaperBroker、风控和 DEMO 下单适配均未实现。这些能力不得从现有
-健康状态误判为已完成。
+PaperBroker、执行风控和 DEMO 下单适配均未实现。这些能力不得从现有健康状态误判为
+已完成。

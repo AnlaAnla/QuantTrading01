@@ -59,6 +59,20 @@ class Ticker24h(BaseModel):
         return milliseconds_to_utc(self.close_time_ms)
 
 
+class OpenInterest(BaseModel):
+    """Response from GET /fapi/v1/openInterest."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    symbol: str
+    value: Decimal = Field(alias="openInterest")
+    time_ms: int = Field(alias="time")
+
+    @property
+    def timestamp(self) -> datetime:
+        return milliseconds_to_utc(self.time_ms)
+
+
 class Kline(BaseModel):
     """One Binance candlestick parsed from its positional array representation."""
 

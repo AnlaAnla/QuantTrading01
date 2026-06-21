@@ -12,7 +12,7 @@ import httpx
 
 from ..exceptions import BinanceAPIError, BinanceRateLimitError
 from ..market_data.order_book import DepthSnapshot
-from .models import ExchangeInfo, Kline, Ticker24h
+from .models import ExchangeInfo, Kline, OpenInterest, Ticker24h
 
 Sleep = Callable[[float], Awaitable[None]]
 
@@ -111,6 +111,13 @@ class BinancePublicRESTClient:
             )
         except (KeyError, TypeError, ValueError, IndexError) as exc:
             raise BinanceAPIError("Invalid depth snapshot payload") from exc
+
+    async def open_interest(self, symbol: str) -> OpenInterest:
+        """Fetch GET /fapi/v1/openInterest (request weight 1)."""
+        payload = await self._get_json("/fapi/v1/openInterest", params={"symbol": symbol})
+        if not isinstance(payload, dict):
+            raise BinanceAPIError("Expected an object from open-interest endpoint")
+        return OpenInterest.model_validate(payload)
 
     async def _get_json(
         self,
