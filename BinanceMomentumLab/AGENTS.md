@@ -14,6 +14,12 @@ hard-disabled.
 - Keep internal timestamps timezone-aware and in UTC.
 - Keep market data, strategy, risk, and execution boundaries separate.
 - Strategy output is research-only: structured signals must never submit or imply orders.
+- PaperBroker must remain local-only and must never share code paths with authenticated Binance
+  order endpoints.
+- Paper fills may only use contemporaneous bookTicker/order-book liquidity after configured
+  latency; never infer fills from future candles, highs, or lows.
+- All exits are reduce-only. Never average down or reopen from an unfilled entry remainder after a
+  protective exit.
 - Keep every strategy threshold in `Settings` and `.env.example`.
 - Preserve deterministic replay: never use wall-clock time or random IDs in feature/state logic.
 - Inject network clients so tests remain offline and deterministic.

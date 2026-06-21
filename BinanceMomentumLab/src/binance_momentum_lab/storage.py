@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterable
+from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
 from threading import Lock
@@ -11,6 +12,7 @@ from typing import Any
 
 import duckdb
 
+from .paper.models import AccountSnapshot, PaperFill, PaperOrder, PaperPosition
 from .scanner import Candidate
 from .strategy.models import FeatureSnapshot, StrategySignal, StrategyState
 
@@ -240,6 +242,97 @@ class DuckDBStore:
                 SELECT payload_json FROM signals
                 ORDER BY created_at DESC LIMIT ?
                 """,
+                [limit],
+            ).fetchall()
+        return [json.loads(str(row[0])) for row in rows]
+
+    def save_paper_order(self, order: PaperOrder) -> None:
+        with self._lock:
+            self._connection.execute(
+                """
+                INSERT INTO paper_orders VALUES (?, ?, ?, ?)
+                ON CONFLICT (order_id) DO UPDATE SET payload_json = excluded.payload_json
+                """,
+                [order.order_id, order.symbol, order.created_at, order.model_dump_json()],
+            )
+
+    def save_paper_fill(self, fill: PaperFill) -> None:
+        with self._lock:
+            self._connection.execute(
+                """
+                INSERT INTO paper_fills VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT (fill_id) DO NOTHING
+                """,
+                [
+                    fill.fill_id,
+                    fill.order_id,
+                    fill.symbol,
+                    fill.timestamp,
+                    fill.model_dump_json(),
+                ],
+            )
+
+    def save_paper_position(self, position: PaperPosition | None, symbol: str) -> None:
+        with self._lock:
+            if position is None:
+                self._connection.execute("DELETE FROM positions WHERE symbol = ?", [symbol])
+                return
+            payload = json.dumps(asdict(position), default=str)
+            self._connection.execute(
+                """
+                INSERT INTO positions VALUES (?, ?, ?)
+                ON CONFLICT (symbol) DO UPDATE SET
+                    updated_at = excluded.updated_at,
+                    payload_json = excluded.payload_json
+                """,
+                [position.symbol, position.opened_at, payload],
+            )
+
+    def save_account_snapshot(self, snapshot: AccountSnapshot) -> None:
+        with self._lock:
+            self._connection.execute(
+                """
+                INSERT INTO account_snapshots VALUES (?, ?)
+                ON CONFLICT (observed_at) DO UPDATE SET payload_json = excluded.payload_json
+                """,
+                [snapshot.timestamp, snapshot.model_dump_json()],
+            )
+
+    def list_paper_orders(self, limit: int = 100) -> list[dict[str, Any]]:
+        return self._list_json("paper_orders", "created_at", limit)
+
+    def list_paper_fills(self, limit: int = 100) -> list[dict[str, Any]]:
+        return self._list_json("paper_fills", "filled_at", limit)
+
+    def list_positions(self) -> list[dict[str, Any]]:
+        return self._list_json("positions", "updated_at", 100)
+
+    def list_account_snapshots(self, limit: int = 1000) -> list[dict[str, Any]]:
+        return self._list_json("account_snapshots", "observed_at", limit)
+
+    def reset_paper(self) -> None:
+        with self._lock:
+            self._connection.execute("BEGIN TRANSACTION")
+            try:
+                for table in ("paper_orders", "paper_fills", "positions", "account_snapshots"):
+                    self._connection.execute(f"DELETE FROM {table}")
+                self._connection.execute("COMMIT")
+            except Exception:
+                self._connection.execute("ROLLBACK")
+                raise
+
+    def _list_json(self, table: str, order_column: str, limit: int) -> list[dict[str, Any]]:
+        allowed = {
+            ("paper_orders", "created_at"),
+            ("paper_fills", "filled_at"),
+            ("positions", "updated_at"),
+            ("account_snapshots", "observed_at"),
+        }
+        if (table, order_column) not in allowed:
+            raise ValueError("Unsupported repository query")
+        with self._lock:
+            rows = self._connection.execute(
+                f"SELECT payload_json FROM {table} ORDER BY {order_column} DESC LIMIT ?",
                 [limit],
             ).fetchall()
         return [json.loads(str(row[0])) for row in rows]

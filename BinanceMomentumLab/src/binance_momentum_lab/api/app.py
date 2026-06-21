@@ -17,6 +17,9 @@ from ..config import Settings, get_settings
 from ..logging_config import configure_logging
 from ..market_data.candidates import DynamicCandidateManager
 from ..market_data.service import RealtimeMarketDataService
+from ..paper.broker import PaperBroker
+from ..paper.risk import RiskManager
+from ..paper.service import PaperExecutionService
 from ..runtime import ScannerRuntime
 from ..scanner import Candidate
 from ..storage import DuckDBStore
@@ -68,11 +71,31 @@ def create_app(settings: Settings | None = None, *, start_scanner: bool = True) 
             candidate_manager.subscribe(strategy.update_symbols)
             assert realtime is not None
             realtime.subscribe(strategy.on_event)
+        risk_manager = RiskManager(configured)
+        paper_broker = PaperBroker(configured, risk_manager, store)
+        paper_execution = (
+            PaperExecutionService(
+                configured,
+                paper_broker,
+                strategy,
+                realtime.health,
+                realtime.books.books,
+            )
+            if strategy is not None and realtime is not None
+            else None
+        )
+        if paper_execution is not None:
+            assert strategy is not None and realtime is not None
+            strategy.subscribe_signal(paper_execution.on_signal)
+            realtime.subscribe(paper_execution.on_event)
         app.state.settings = configured
         app.state.store = store
         app.state.runtime = runtime
         app.state.realtime = realtime
         app.state.strategy = strategy
+        app.state.risk_manager = risk_manager
+        app.state.paper_broker = paper_broker
+        app.state.paper_execution = paper_execution
         app.state.emergency_stop = False
         if runtime is not None:
             if realtime is not None:
@@ -133,10 +156,16 @@ def create_app(settings: Settings | None = None, *, start_scanner: bool = True) 
         return await asyncio.to_thread(store.list_candidates)
 
     @app.get("/api/positions")
+    async def positions(request: Request) -> list[dict[str, Any]]:
+        return await asyncio.to_thread(request.app.state.store.list_positions)
+
     @app.get("/api/orders")
+    async def orders(request: Request) -> list[dict[str, Any]]:
+        return await asyncio.to_thread(request.app.state.store.list_paper_orders)
+
     @app.get("/api/trades")
-    async def phase_two_empty_collections() -> list[object]:
-        return []
+    async def trades(request: Request) -> list[dict[str, Any]]:
+        return await asyncio.to_thread(request.app.state.store.list_paper_fills)
 
     @app.get("/api/signals")
     async def signals(request: Request) -> list[dict[str, Any]]:
@@ -144,18 +173,24 @@ def create_app(settings: Settings | None = None, *, start_scanner: bool = True) 
         return await asyncio.to_thread(store.list_signals)
 
     @app.get("/api/performance")
-    async def performance() -> dict[str, object]:
-        return {
-            "implemented": False,
-            "reason": "PaperBroker is outside phase one",
-        }
+    async def performance(request: Request) -> dict[str, object]:
+        broker: PaperBroker = request.app.state.paper_broker
+        return broker.performance()
 
     @app.post("/api/paper/reset")
-    async def reset_paper() -> None:
-        raise HTTPException(status_code=501, detail="PaperBroker is not implemented in phase one")
+    async def reset_paper(request: Request) -> dict[str, bool]:
+        broker: PaperBroker = request.app.state.paper_broker
+        try:
+            await asyncio.to_thread(broker.reset)
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        request.app.state.emergency_stop = False
+        return {"reset": True}
 
     @app.post("/api/emergency-stop")
     async def emergency_stop(request: Request) -> dict[str, bool]:
+        broker: PaperBroker = request.app.state.paper_broker
+        broker.emergency_close_all(datetime.now(UTC))
         request.app.state.emergency_stop = True
         return {"emergency_stop": True}
 

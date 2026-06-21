@@ -35,3 +35,7 @@ class OrderBookNotSynchronizedError(MomentumLabError):
 
 class OrderBookSequenceGapError(MomentumLabError):
     """Raised when depth update IDs are discontinuous and resync is required."""
+
+
+class NonMonotonicMarketDataError(MomentumLabError):
+    """Raised when paper execution receives market data from the future's past."""

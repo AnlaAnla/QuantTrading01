@@ -2,10 +2,14 @@ from datetime import UTC, datetime
 from decimal import Decimal
 
 from binance_momentum_lab.config import Settings
+from binance_momentum_lab.paper.broker import PaperBroker
+from binance_momentum_lab.paper.risk import RiskDecision, RiskManager
 from binance_momentum_lab.scanner import Candidate
 from binance_momentum_lab.storage import DuckDBStore
 from binance_momentum_lab.strategy.replay import HistoricalFeatureReplay
 from binance_momentum_lab.strategy.state_machine import StrategyStateMachine
+from tests.test_paper_broker import market
+from tests.test_risk_manager import long_signal
 from tests.test_strategy_state_machine import replay_events
 
 
@@ -59,4 +63,25 @@ def test_persists_feature_snapshots_signals_and_strategy_state() -> None:
     assert len(saved) == 1
     assert saved[0]["signal_id"] == signal.signal_id
     assert saved[0]["reason_codes"]
+    store.close()
+
+
+def test_persists_paper_orders_fills_positions_and_equity_curve() -> None:
+    store = DuckDBStore(":memory:")
+    store.initialize()
+    settings = Settings(_env_file=None, paper_network_latency_ms=0)
+    broker = PaperBroker(settings, RiskManager(settings), store)
+    signal = long_signal()
+    broker.submit_entry(signal, RiskDecision(True, Decimal("2")), signal.timestamp)
+    broker.on_market(market(signal, 0))
+
+    assert len(store.list_paper_orders()) == 3
+    assert len(store.list_paper_fills()) == 1
+    assert len(store.list_positions()) == 1
+    assert len(store.list_account_snapshots()) == 1
+
+    broker.on_market(market(signal, 100, bid="103", ask="103.02"))
+    assert len(store.list_paper_fills()) == 2
+    assert store.list_positions() == []
+    assert len(store.list_account_snapshots()) == 2
     store.close()

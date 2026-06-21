@@ -92,6 +92,23 @@ class Settings(BaseSettings):
     strategy_short_taker_sell_ratio: Decimal = Field(default=Decimal("0.55"), ge=0, le=1)
     strategy_cooldown_seconds: int = Field(default=1800, ge=1)
 
+    paper_taker_fee_rate: Decimal = Field(default=Decimal("0.0004"), ge=0, le=1)
+    paper_network_latency_ms: int = Field(default=100, ge=0)
+    paper_base_slippage_bps: Decimal = Field(default=Decimal("1"), ge=0)
+    paper_volatility_slippage_factor: Decimal = Field(default=Decimal("0.20"), ge=0)
+    paper_spread_slippage_factor: Decimal = Field(default=Decimal("0.25"), ge=0)
+    paper_notional_slippage_bps_per_100k: Decimal = Field(default=Decimal("1"), ge=0)
+    paper_take_profit_r_multiple: Decimal = Field(default=Decimal("2"), gt=0)
+    paper_max_hold_seconds: int = Field(default=900, ge=1)
+    paper_quantity_step: Decimal = Field(default=Decimal("0.001"), gt=0)
+    risk_per_trade_fraction: Decimal = Field(default=Decimal("0.0025"), gt=0, le=1)
+    risk_max_positions: int = Field(default=1, ge=1)
+    risk_max_daily_loss_fraction: Decimal = Field(default=Decimal("0.01"), gt=0, le=1)
+    risk_consecutive_loss_limit: int = Field(default=3, ge=1)
+    risk_cooldown_seconds: int = Field(default=1800, ge=1)
+    risk_data_max_age_seconds: float = Field(default=3, gt=0)
+    risk_max_position_notional_multiple: Decimal = Field(default=Decimal("1"), gt=0)
+
     @field_validator("binance_mainnet_ws_url", "binance_demo_ws_url")
     @classmethod
     def validate_websocket_url(cls, value: str) -> str:
@@ -142,6 +159,15 @@ class Settings(BaseSettings):
                 "pullback_max_ratio": str(self.strategy_pullback_max_ratio),
                 "short_taker_sell_ratio": str(self.strategy_short_taker_sell_ratio),
                 "cooldown_seconds": self.strategy_cooldown_seconds,
+            },
+            "paper_risk": {
+                "risk_per_trade_fraction": str(self.risk_per_trade_fraction),
+                "max_positions": self.risk_max_positions,
+                "max_daily_loss_fraction": str(self.risk_max_daily_loss_fraction),
+                "consecutive_loss_limit": self.risk_consecutive_loss_limit,
+                "data_max_age_seconds": self.risk_data_max_age_seconds,
+                "network_latency_ms": self.paper_network_latency_ms,
+                "taker_fee_rate": str(self.paper_taker_fee_rate),
             },
         }
 

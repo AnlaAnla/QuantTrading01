@@ -1,0 +1,13 @@
+{
+  "features": [
+    {"symbol":"FAILUSDT","timestamp":"2026-02-02T00:00:00Z","price":"100","return_5m_percent":"2","volume_zscore":"3","anchored_vwap":"100","spread_bps":"2","taker_buy_ratio":"0.55","open_interest_change_5m_percent":"0.5","cvd":"50","quote_volume_1m":"100","previous_5m_average_quote_volume":"100"},
+    {"symbol":"FAILUSDT","timestamp":"2026-02-02T00:01:00Z","price":"103","return_1m_percent":"1","return_5m_percent":"3.5","volume_zscore":"4.5","anchored_vwap":"100","spread_bps":"2","taker_buy_ratio":"0.60","open_interest_change_5m_percent":"1.2","cvd":"100","quote_volume_1m":"120","previous_5m_average_quote_volume":"100"},
+    {"symbol":"FAILUSDT","timestamp":"2026-02-02T00:02:00Z","price":"105","return_1m_percent":"1","return_5m_percent":"4","volume_zscore":"5","anchored_vwap":"100","spread_bps":"2","taker_buy_ratio":"0.62","open_interest_change_5m_percent":"1.4","cvd":"110","quote_volume_1m":"130","previous_5m_average_quote_volume":"100"},
+    {"symbol":"FAILUSDT","timestamp":"2026-02-02T00:03:00Z","price":"101","return_1m_percent":"-4","return_5m_percent":"1","volume_zscore":"4","anchored_vwap":"100","spread_bps":"3","taker_buy_ratio":"0.40","open_interest_change_5m_percent":"0.2","cvd":"40","quote_volume_1m":"160","previous_5m_average_quote_volume":"100"}
+  ],
+  "markets": [
+    {"timestamp":"2026-02-02T00:03:00Z","bid":"100.9","ask":"101.1","quantity":"100"}
+  ],
+  "expected_state":"BREAKDOWN",
+  "expected_signals":0
+}

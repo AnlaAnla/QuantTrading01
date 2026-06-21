@@ -90,6 +90,25 @@ basis、spread、前 5/20 档盘口不平衡以及相对 BTC 的残差收益。O
 所有数值阈值均位于 `.env.example` 和 `Settings`，百分比使用百分点单位，例如 3%
 配置为 `3`。
 
+## PaperBroker 与风险管理
+
+`PAPER` 模式可以把研究信号交给本地 RiskManager 和 PaperBroker。系统绝不调用 Binance
+账户或下单接口。开仓前会检查每日亏损、连续亏损冷却、行情新鲜度、WebSocket 健康、
+订单簿同步、点差、最大仓位数和紧急停止；仓位按账户权益、单笔风险比例及信号止损距离
+计算，并受最大名义金额限制。
+
+撮合只使用订单延迟结束时可见的 bookTicker 和本地订单簿档位，不读取未来事件，也不以
+K 线最高价/最低价推定成交。成交价先按可见档位计算 VWAP，再叠加由波动率、点差和订单
+名义金额驱动的逆向滑点；每次成交均扣除手续费。Funding 只在明确的 funding 事件发生时
+入账。
+
+入场后生成 reduce-only 止损和止盈，另有时间止损；紧急停止只允许 reduce-only 平仓。
+任何已有仓位都会阻止新的入场，部分入场后若先触发止损，会优先平仓并取消尚未成交的
+入场余量，防止对亏损仓加仓。订单、成交、持仓和账户权益曲线写入 DuckDB。
+
+离线测试包含三套固定行情：点火—回调—继续上涨、点火后立即失败、高位派发—跌破
+VWAP—反抽失败。每套都验证状态、订单、成交和净盈亏。
+
 ## 官方接口依据
 
 - [USDⓈ-M Futures General Info](https://developers.binance.com/docs/derivatives/usds-margined-futures/general-info)
@@ -104,5 +123,5 @@ basis、spread、前 5/20 档盘口不平衡以及相对 BTC 的残差收益。O
 
 ## 第一阶段以外
 
-PaperBroker、执行风控和 DEMO 下单适配均未实现。这些能力不得从现有健康状态误判为
-已完成。
+真实交易和 DEMO 下单适配均未实现。PaperBroker 只存在于本地进程与 DuckDB 中，不得
+被改造成真实订单适配器。
